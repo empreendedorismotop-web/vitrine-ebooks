@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       .select('*')
       .eq('status', 'pendente')
       .lte('agendado_para', limiteHorario.toISOString())
-      .limit(15); // <--- LIMITE AUMENTADO PARA A FILA ANDAR MAIS RÁPIDO
+      .limit(15); 
 
     if (erroFila) throw erroFila;
     
@@ -51,20 +51,32 @@ export async function GET(request: Request) {
       try {
         const destinatario = item.email || item.email_destino; 
         const assuntoEmail = item.assunto || 'Atualização da Vitrine';
-        
         const nomeCliente = item.nome || 'Cliente';
         const textoCru = item.mensagem || '';
-        
-        // RASTREIO DE CLIQUES 
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-        const linkOriginal = item.url_botao || baseUrl; 
-        
-        // Envelopa o destino final na sua rota de métricas
-        const linkRastreio = `${baseUrl}/api/track?campanha=fila_${item.id}&destino=${encodeURIComponent(linkOriginal)}`;
 
         if (!destinatario) {
           idsParaAtualizarErro.push(item.id); 
           continue; 
+        }
+
+        // ==========================================
+        // CORREÇÃO DO BOTÃO: INTELIGENTE E SEGURO
+        // ==========================================
+        let htmlBotao = '';
+        
+        // Só constrói o bloco do botão se realmente existir um link salvo no banco
+        if (item.url_botao && item.url_botao.trim() !== '') {
+          
+          // Usando o link direto para evitar bloqueios do Gmail por causa de localhost
+          const linkSeguro = item.url_botao;
+          
+          htmlBotao = `
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="${linkSeguro}" target="_blank" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    ${item.texto_botao || 'Acessar Minha Oferta'}
+                </a>
+            </div>
+          `;
         }
 
         const htmlMensagem = `
@@ -79,11 +91,9 @@ export async function GET(request: Request) {
                       ${textoCru}
                   </div>
                   
-                  <div style="text-align: center; margin-top: 30px;">
-                      <a href="${linkRastreio}" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                          ${item.texto_botao || 'Acessar Minha Oferta'}
-                      </a>
-                  </div>
+                  <!-- O BOTÃO SÓ VAI APARECER AQUI SE TIVER LINK -->
+                  ${htmlBotao}
+                  
               </div>
           </div>
         `;
