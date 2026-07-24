@@ -56,9 +56,10 @@ export default function AdminPage() {
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
-  // --- ESTADOS DO MODAL DE LIMPEZA ---
+  // Estados dos Modais
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
-  const [diasInatividade, setDiasInatividade] = useState(90) // Padrão recomendado: 90 dias
+  const [diasInatividade, setDiasInatividade] = useState(90)
+  const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null) // NOVO: Controle da edição rápida
 
   useEffect(() => {
     carregarPerfis()
@@ -107,39 +108,51 @@ export default function AdminPage() {
     document.body.removeChild(link)
   }
 
-  // A LÓGICA DE SEGURANÇA: Data limite e filtro estrito
   const dataLimite = new Date()
   dataLimite.setDate(dataLimite.getDate() - diasInatividade)
 
   const contatosFrios = perfis.filter(p => {
-    // TRAVA DE SEGURANÇA 1: Se estiver Ativo ou Pendente, o sistema ignora (protegido).
     if (p.status !== 'inativo') return false
-    
-    // TRAVA DE SEGURANÇA 2: Se já clicou em algum e-mail, está a salvo.
     const clicouAlgumaVez = p.cliques && p.cliques.length > 0
     if (clicouAlgumaVez) return false
-
-    // TRAVA DE SEGURANÇA 3: Só pega quem foi cadastrado ANTES da data limite (ex: 90 dias atrás).
     const dataCadastro = p.created_at ? new Date(p.created_at) : new Date()
     return dataCadastro < dataLimite
   })
 
   const executarLimpezaFrios = async () => {
     const idsParaExcluir = contatosFrios.map(p => p.id)
-    
     if (idsParaExcluir.length === 0) {
       setModalLimpezaAberto(false)
       return mostrarNotificacao('Nenhum contato inativo antigo encontrado.', 'sucesso')
     }
-
     const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
-    
     if (error) {
       mostrarNotificacao('Erro ao limpar contatos.', 'erro')
     } else {
       mostrarNotificacao(`${idsParaExcluir.length} contatos frios excluídos com sucesso!`, 'sucesso')
       setModalLimpezaAberto(false)
       carregarPerfis()
+    }
+  }
+
+  // --- NOVA FUNÇÃO: SALVAR EDIÇÃO RÁPIDA ---
+  const salvarEdicaoAnuncio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!perfilEditando) return;
+
+    const { error } = await supabase.from('profiles').update({
+      nome: perfilEditando.nome,
+      titulo_ebook: perfilEditando.titulo_ebook,
+      link_site: perfilEditando.link_site,
+      imagem_url: perfilEditando.imagem_url
+    }).eq('id', perfilEditando.id);
+
+    if (error) {
+      mostrarNotificacao('Erro ao salvar as edições do anúncio.', 'erro');
+    } else {
+      mostrarNotificacao('Anúncio do cliente atualizado com sucesso!', 'sucesso');
+      setPerfilEditando(null); // Fecha o modal
+      carregarPerfis(); // Atualiza a lista na tela
     }
   }
 
@@ -152,33 +165,20 @@ export default function AdminPage() {
   const mudarPosicaoFixa = async (id: string, posicao: string) => {
     const valorParaSalvar = posicao === 'nenhuma' ? null : Number(posicao);
     const { error } = await supabase.from('profiles').update({ posicao_fixa: valorParaSalvar }).eq('id', id)
-    
-    if (error) {
-      mostrarNotificacao('Erro ao alterar posição VIP.', 'erro')
-    } else {
-      mostrarNotificacao('Posição VIP atualizada com sucesso!', 'sucesso')
-      carregarPerfis()
-    }
+    if (error) mostrarNotificacao('Erro ao alterar posição VIP.', 'erro')
+    else { mostrarNotificacao('Posição VIP atualizada com sucesso!', 'sucesso'); carregarPerfis() }
   }
 
   const mudarPlano = async (id: string, novoPlano: string) => {
     const { error } = await supabase.from('profiles').update({ plano_selecionado: novoPlano }).eq('id', id)
-    if (error) {
-      mostrarNotificacao('Erro ao alterar plano.', 'erro')
-    } else {
-      mostrarNotificacao('Plano atualizado com sucesso!', 'sucesso')
-      carregarPerfis()
-    }
+    if (error) mostrarNotificacao('Erro ao alterar plano.', 'erro')
+    else { mostrarNotificacao('Plano atualizado com sucesso!', 'sucesso'); carregarPerfis() }
   }
 
   const mudarDataExpiracao = async (id: string, novaData: string) => {
     const { error } = await supabase.from('profiles').update({ data_expiracao: novaData || null }).eq('id', id)
-    if (error) {
-      mostrarNotificacao('Erro ao alterar vencimento.', 'erro')
-    } else {
-      mostrarNotificacao('Data de vencimento salva!', 'sucesso')
-      carregarPerfis()
-    }
+    if (error) mostrarNotificacao('Erro ao alterar vencimento.', 'erro')
+    else { mostrarNotificacao('Data de vencimento salva!', 'sucesso'); carregarPerfis() }
   }
 
   const excluirPerfil = async (id: string) => {
@@ -190,128 +190,81 @@ export default function AdminPage() {
   }
 
   const dispararLembretePendente = async (perfil: Perfil) => {
-    if (confirm(`Deseja enviar um lembrete de ativação de plano para ${perfil.nome}?`)) {
-      
+    if (confirm(`Deseja enviar um lembrete de ativação para ${perfil.nome}?`)) {
       fetch('/api/enviar-lembrete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: perfil.email, 
-          nome: perfil.nome, 
-          titulo: perfil.titulo_ebook || '', 
-          plano: perfil.plano_selecionado || '' 
-        })
-      }).catch(err => console.error('Erro silencioso API:', err))
+        body: JSON.stringify({ email: perfil.email, nome: perfil.nome, titulo: perfil.titulo_ebook || '', plano: perfil.plano_selecionado || '' })
+      }).catch(err => console.error('Erro silencioso:', err))
 
       const novoEnvio = {
-        perfil_id: perfil.id,
-        email: perfil.email,
-        nome: perfil.nome,
+        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome,
         assunto: `Finalize seu cadastro, ${perfil.nome.split(' ')[0]}!`,
-        mensagem: 'Notamos que seu anúncio ainda está aguardando ativação. Escolha um plano agora mesmo para publicar sua oferta e começar a receber cliques!',
-        texto_botao: 'Ativar Anúncio Agora',
-        url_botao: `${window.location.origin}/planos`, 
-        base_url: window.location.origin,
-        status: 'pendente',
-        clicou: false,
-        provedor: 'gmail',
-        agendado_para: new Date().toISOString()
+        mensagem: 'Notamos que seu anúncio ainda está aguardando ativação. Escolha um plano agora mesmo para publicar sua oferta!',
+        texto_botao: 'Ativar Anúncio Agora', url_botao: `${window.location.origin}/planos`, base_url: window.location.origin,
+        status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
-      
       mostrarNotificacao('Lembrete enviado e rastreio adicionado à Fila!', 'sucesso')
       carregarFila()
     }
   }
 
   const dispararLembreteInativo = async (perfil: Perfil) => {
-    if (confirm(`Deseja enviar um e-mail de renovação de plano para ${perfil.nome}?`)) {
+    if (confirm(`Deseja enviar um e-mail de renovação para ${perfil.nome}?`)) {
       const novoEnvio = {
-        perfil_id: perfil.id,
-        email: perfil.email,
-        nome: perfil.nome,
+        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome,
         assunto: `⚠️ Seu acesso expirou, ${perfil.nome.split(' ')[0]}!`,
-        mensagem: 'Notamos que o seu plano expirou e seu anúncio foi pausado. Não perca suas vendas! Clique no botão abaixo para escolher um novo plano e reativar seu acesso imediatamente.',
-        texto_botao: 'Ver Planos e Renovar',
-        url_botao: `${window.location.origin}/planos`, 
-        base_url: window.location.origin,
-        status: 'pendente',
-        clicou: false,
-        provedor: 'gmail',
-        agendado_para: new Date().toISOString()
+        mensagem: 'Notamos que o seu plano expirou e seu anúncio foi pausado. Clique abaixo para escolher um novo plano e reativar.',
+        texto_botao: 'Ver Planos e Renovar', url_botao: `${window.location.origin}/planos`, base_url: window.location.origin,
+        status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
       mostrarNotificacao('Lembrete de renovação enviado para a Fila!', 'sucesso')
-      setAbaAtiva('fila')
-      setAbaFila('pendente')
-      carregarFila()
+      setAbaAtiva('fila'); setAbaFila('pendente'); carregarFila()
     }
   }
 
   const removerDaFila = async (id: string) => {
-    await supabase.from('fila_envios').delete().eq('id', id)
-    mostrarNotificacao('Deletado com sucesso.', 'sucesso')
-    carregarFila()
+    await supabase.from('fila_envios').delete().eq('id', id); mostrarNotificacao('Deletado com sucesso.', 'sucesso'); carregarFila()
   }
 
   const limparHistoricoEnviados = async () => {
-    if (confirm('Tem certeza que deseja apagar TODO o histórico de e-mails enviados?')) {
-      await supabase.from('fila_envios').delete().eq('status', 'enviado')
-      mostrarNotificacao('Histórico limpo com sucesso.', 'sucesso')
-      carregarFila()
+    if (confirm('Apagar TODO o histórico de e-mails enviados?')) {
+      await supabase.from('fila_envios').delete().eq('status', 'enviado'); mostrarNotificacao('Histórico limpo.', 'sucesso'); carregarFila()
     }
   }
 
   const esvaziarFila = async () => {
-    if (confirm('ATENÇÃO: Cancelar TODOS os envios PENDENTES?')) {
-      await supabase.from('fila_envios').delete().eq('status', 'pendente')
-      carregarFila(); 
-      mostrarNotificacao('Fila de pendentes esvaziada.', 'sucesso');
+    if (confirm('Cancelar TODOS os envios PENDENTES?')) {
+      await supabase.from('fila_envios').delete().eq('status', 'pendente'); carregarFila(); mostrarNotificacao('Fila esvaziada.', 'sucesso');
     }
   }
 
   const reenviarParaNaoClicadores = async () => {
     const naoClicaram = fila.filter(item => item.status === 'enviado' && !item.clicou)
-    
-    if (naoClicaram.length === 0) {
-      return mostrarNotificacao('Todos os clientes desta lista já clicaram!', 'sucesso')
-    }
+    if (naoClicaram.length === 0) return mostrarNotificacao('Todos os clientes já clicaram!', 'sucesso')
 
-    if (confirm(`Agendar o reenvio para os ${naoClicaram.length} clientes que ignoraram o e-mail?\nO sistema fará envios graduais (2 por minuto).`)) {
+    if (confirm(`Agendar o reenvio para os ${naoClicaram.length} clientes que ignoraram o e-mail?`)) {
       setEnviandoMassa(true)
-      
       const registrosFila = []
       let tempoAgendado = new Date() 
-      const limitePorLote = 2        
-      const espacoMinutos = 1        
-
-      for (let i = 0; i < naoClicaram.length; i += limitePorLote) {
-        const lote = naoClicaram.slice(i, i + limitePorLote)
-
+      for (let i = 0; i < naoClicaram.length; i += 2) {
+        const lote = naoClicaram.slice(i, i + 2)
         for (const item of lote) {
           registrosFila.push({
-            perfil_id: item.perfil_id,
-            email: item.email,
-            nome: item.nome,
+            perfil_id: item.perfil_id, email: item.email, nome: item.nome,
             assunto: `[Lembrete] ${item.assunto}`,
             mensagem: item.mensagem || 'Notamos que você não abriu nosso último e-mail. Aqui está o link novamente!',
-            texto_botao: item.texto_botao || 'Acessar Agora',
-            url_botao: item.url_botao || window.location.origin,
-            base_url: item.base_url || window.location.origin,
-            status: 'pendente',
-            clicou: false,
-            provedor: provedor, 
-            agendado_para: tempoAgendado.toISOString() 
+            texto_botao: item.texto_botao || 'Acessar Agora', url_botao: item.url_botao || window.location.origin, base_url: item.base_url || window.location.origin,
+            status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
           })
         }
-        tempoAgendado = new Date(tempoAgendado.getTime() + (espacoMinutos * 60000))
+        tempoAgendado = new Date(tempoAgendado.getTime() + 60000)
       }
-
       await supabase.from('fila_envios').insert(registrosFila)
-      mostrarNotificacao(`${registrosFila.length} e-mails agendados na fila de pendentes!`, 'sucesso')
-      setAbaFila('pendente')
-      carregarFila()
-      setEnviandoMassa(false)
+      mostrarNotificacao(`${registrosFila.length} e-mails agendados!`, 'sucesso')
+      setAbaFila('pendente'); carregarFila(); setEnviandoMassa(false)
     }
   }
 
@@ -332,30 +285,18 @@ export default function AdminPage() {
       for (let i = 0; i < lotes.length; i++) {
         for (const cliente of lotes[i]) {
           registrosFila.push({
-            perfil_id: cliente.id,
-            email: cliente.email,
-            nome: cliente.nome,
-            assunto: assuntoCampanha,
-            mensagem: textoCampanha,
-            texto_botao: textoBotao,          
-            url_botao: urlBotao,               
-            base_url: window.location.origin,  
-            status: 'pendente',
-            clicou: false, 
-            provedor: provedor, 
-            agendado_para: tempoAgendado.toISOString() 
+            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome,
+            assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,               
+            base_url: window.location.origin, status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
           })
         }
         tempoAgendado = new Date(tempoAgendado.getTime() + (intervaloLote * 60000))
       }
-
       await supabase.from('fila_envios').insert(registrosFila)
-      mostrarNotificacao(`Sucesso! ${listaFinalIds.length} e-mails agendados via ${provedor.toUpperCase()}.`, 'sucesso')
+      mostrarNotificacao(`Sucesso! ${listaFinalIds.length} e-mails agendados.`, 'sucesso')
       setSelecionados([]); setAssuntoCampanha(''); setTextoCampanha(''); setTextoBotao(''); setUrlBotao('')
       carregarFila() 
-    } catch (error) {
-      mostrarNotificacao('Erro ao enfileirar a campanha.', 'erro')
-    }
+    } catch (error) { mostrarNotificacao('Erro ao enfileirar.', 'erro') }
     setEnviandoMassa(false)
   }
 
@@ -369,19 +310,54 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
+      {/* --- MODAL: EDIÇÃO RÁPIDA DE ANÚNCIO (ADMIN) --- */}
+      {perfilEditando && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-slate-100 bg-purple-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-purple-900">✏️ Editar Anúncio</h2>
+                <p className="text-purple-700 text-xs mt-1">Alterando dados de: <strong>{perfilEditando.email}</strong></p>
+              </div>
+              <button onClick={() => setPerfilEditando(null)} className="text-purple-400 hover:text-purple-700 text-2xl font-bold">&times;</button>
+            </div>
+            
+            <form onSubmit={salvarEdicaoAnuncio} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Cliente / Empresa</label>
+                <input type="text" value={perfilEditando.nome || ''} onChange={e => setPerfilEditando({...perfilEditando, nome: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" required />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Título do E-book / Produto</label>
+                <input type="text" value={perfilEditando.titulo_ebook || ''} onChange={e => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino (Site ou WhatsApp)</label>
+                <input type="url" value={perfilEditando.link_site || ''} onChange={e => setPerfilEditando({...perfilEditando, link_site: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Link da Imagem (URL)</label>
+                <input type="url" value={perfilEditando.imagem_url || ''} onChange={e => setPerfilEditando({...perfilEditando, imagem_url: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" placeholder="https://..." />
+              </div>
+              
+              <div className="pt-4 flex gap-3 justify-end border-t border-slate-100 mt-6">
+                <button type="button" onClick={() => setPerfilEditando(null)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
+                <button type="submit" className="px-5 py-2 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md">Salvar Alterações</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* --- OVERLAY DO MODAL DE LIMPEZA DE LISTA --- */}
       {modalLimpezaAberto && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
-            
             <div className="p-6 border-b border-slate-100 bg-slate-50">
               <h2 className="text-2xl font-bold text-slate-900">Limpeza de Contatos Frios</h2>
               <p className="text-slate-500 text-sm mt-1">Exclua leads que esfriaram para proteger o domínio e as suas campanhas.</p>
             </div>
-
             <div className="p-6 flex-1 overflow-y-auto">
-              
-              {/* ALERTA DE SEGURANÇA VISUAL NOVO */}
               <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
                 <span className="text-xl">🛡️</span>
                 <div>
@@ -389,28 +365,21 @@ export default function AdminPage() {
                   <p className="text-xs text-emerald-700">Fique tranquilo! Clientes com anúncios <strong>Ativos</strong> ou <strong>Pendentes</strong> estão blindados. O sistema buscará apenas os contatos que já estão na sua aba de <strong>Inativos</strong>.</p>
                 </div>
               </div>
-
               <div className="mb-6">
                 <label className="block text-sm font-bold text-slate-700 mb-2">Selecione o Período de Inatividade Absoluta:</label>
-                <select 
-                  value={diasInatividade} 
-                  onChange={(e) => setDiasInatividade(Number(e.target.value))}
-                  className="w-full p-3 border border-slate-200 rounded-lg outline-none font-bold text-slate-800 bg-white"
-                >
+                <select value={diasInatividade} onChange={(e) => setDiasInatividade(Number(e.target.value))} className="w-full p-3 border border-slate-200 rounded-lg outline-none font-bold text-slate-800 bg-white">
                   <option value={30}>Há mais de 30 dias (1 Mês)</option>
                   <option value={60}>Há mais de 60 dias (2 Meses)</option>
                   <option value={90}>Há mais de 90 dias (3 Meses - Recomendado)</option>
                   <option value={120}>Há mais de 120 dias (4 Meses)</option>
                 </select>
               </div>
-
               <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
                 <p className="font-bold text-rose-800 mb-3 text-sm">
                   {contatosFrios.length === 0 
                     ? `Nenhum contato INATIVO e SEM CLIQUES cadastrado há mais de ${diasInatividade} dias foi encontrado.` 
                     : `⚠️ ${contatosFrios.length} contato(s) inativo(s) se encaixa(m) nessa regra e será(ão) excluído(s):`}
                 </p>
-                
                 {contatosFrios.length > 0 && (
                   <div className="max-h-[200px] overflow-y-auto divide-y divide-rose-200/50 pr-2">
                     {contatosFrios.map(p => (
@@ -423,23 +392,10 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
-
             <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button 
-                onClick={() => setModalLimpezaAberto(false)} 
-                className="px-6 py-2.5 rounded-lg font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={executarLimpezaFrios}
-                disabled={contatosFrios.length === 0}
-                className={`px-6 py-2.5 rounded-lg font-bold text-white transition-colors ${contatosFrios.length === 0 ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 shadow-md'}`}
-              >
-                Confirmar e Excluir
-              </button>
+              <button onClick={() => setModalLimpezaAberto(false)} className="px-6 py-2.5 rounded-lg font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100">Cancelar</button>
+              <button onClick={executarLimpezaFrios} disabled={contatosFrios.length === 0} className={`px-6 py-2.5 rounded-lg font-bold text-white ${contatosFrios.length === 0 ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 shadow-md'}`}>Confirmar e Excluir</button>
             </div>
-            
           </div>
         </div>
       )}
@@ -464,12 +420,8 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('inativo')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'inativo' ? 'bg-red-100 text-red-800' : 'bg-white text-slate-600 border'}`}>Inativos</button>
           
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
-             <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm transition-all">
-               📊 Baixar CSV
-             </button>
-             <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm transition-all">
-               🧹 Limpar Frios
-             </button>
+             <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm">📊 Baixar CSV</button>
+             <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm">🧹 Limpar Frios</button>
           </div>
           
           <button onClick={() => setAbaAtiva('fila')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ml-auto ${abaAtiva === 'fila' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700 border border-indigo-200'}`}>
@@ -481,9 +433,7 @@ export default function AdminPage() {
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             {perfisFiltrados.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 font-bold text-lg">
-                Nenhum cliente com status "{abaAtiva}" no momento.
-              </div>
+              <div className="p-12 text-center text-slate-500 font-bold text-lg">Nenhum cliente com status "{abaAtiva}" no momento.</div>
             ) : (
               <div className="divide-y divide-slate-100">
                 {perfisFiltrados.map(perfil => (
@@ -493,53 +443,36 @@ export default function AdminPage() {
                       <p className="text-sm text-slate-600">{perfil.email} | Site: {perfil.link_site || 'Não informado'}</p>
                       
                       <div className="flex flex-wrap items-center gap-2 mt-3">
-                        
                         <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
                           <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
-                          <input
-                            type="text"
-                            list="sugestoes-planos"
-                            value={perfil.plano_selecionado || ''}
-                            onChange={(e) => mudarPlano(perfil.id, e.target.value)}
-                            placeholder="Ex: 5 meses"
-                            className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28 cursor-text hover:border-indigo-400"
-                          />
+                          <input type="text" list="sugestoes-planos" value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28" />
                           <datalist id="sugestoes-planos">
-                            <option value="1_mes">1 Mês</option>
-                            <option value="3_meses">3 Meses</option>
-                            <option value="6_meses">6 Meses</option>
-                            <option value="12_meses">12 Meses</option>
-                            <option value="vitalicio">Vitalício</option>
+                            <option value="1_mes">1 Mês</option><option value="3_meses">3 Meses</option><option value="6_meses">6 Meses</option><option value="12_meses">12 Meses</option><option value="vitalicio">Vitalício</option>
                           </datalist>
                         </div>
 
                         <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100">
                           <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
-                          <input 
-                            type="date"
-                            value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''}
-                            onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)}
-                            className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none cursor-pointer hover:border-rose-400"
-                          />
+                          <input type="date" value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''} onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none" />
                         </div>
                         
                         <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100">
                           <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
-                          <select 
-                            value={perfil.posicao_fixa || 'nenhuma'}
-                            onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)}
-                            className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none cursor-pointer hover:border-amber-400"
-                          >
+                          <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none">
                             <option value="nenhuma">Padrão</option>
-                            {[...Array(12)].map((_, i) => (
-                              <option key={i+1} value={i+1}>Top {i+1}</option>
-                            ))}
+                            {[...Array(12)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
                           </select>
                         </div>
-
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      
+                      {/* BOTÃO MÁGICO DE EDIÇÃO PARA O ADMIN */}
+                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200">
+                        ✏️ Editar
+                      </button>
+
                       {abaAtiva === 'pendente' && (
                         <>
                            <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200">📩 Lembrete</button>
@@ -571,74 +504,44 @@ export default function AdminPage() {
                 <h2 className="text-xl font-bold text-slate-900">Servidor de Envios</h2>
                 <p className="text-sm text-slate-500 mt-1">Acompanhe cliques, status e limpe o histórico.</p>
               </div>
-              
               <div className="flex bg-slate-200/50 p-1 rounded-lg">
                   <button onClick={() => setAbaFila('pendente')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${abaFila === 'pendente' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Pendentes</button>
                   <button onClick={() => setAbaFila('enviado')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${abaFila === 'enviado' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Enviados</button>
                   <button onClick={() => setAbaFila('erro')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${abaFila === 'erro' ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Com Erro</button>
               </div>
-
               <div className="flex flex-wrap gap-2">
                 {abaFila === 'pendente' && filaFiltrada.length > 0 && (
                   <button onClick={esvaziarFila} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">🛑 Cancelar Pendentes</button>
                 )}
-                
                 {abaFila === 'enviado' && filaFiltrada.length > 0 && (
                   <>
-                    <button onClick={reenviarParaNaoClicadores} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 shadow-sm transition-all">
-                      🔄 Reenviar (Não Clicou)
-                    </button>
-                    <button onClick={limparHistoricoEnviados} className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-100 transition-all">
-                      🧹 Limpar Tudo
-                    </button>
+                    <button onClick={reenviarParaNaoClicadores} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 shadow-sm">🔄 Reenviar (Não Clicou)</button>
+                    <button onClick={limparHistoricoEnviados} className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-100">🧹 Limpar Tudo</button>
                   </>
                 )}
               </div>
             </div>
 
             {filaFiltrada.length === 0 ? (
-              <div className="p-12 text-center">
-                <span className="text-4xl mb-4 block">{abaFila === 'pendente' ? '⏳' : abaFila === 'enviado' ? '✅' : '🛡️'}</span>
-                <p className="text-slate-500 font-bold text-lg">Nenhum e-mail {abaFila} no momento.</p>
-              </div>
+              <div className="p-12 text-center"><span className="text-4xl mb-4 block">{abaFila === 'pendente' ? '⏳' : abaFila === 'enviado' ? '✅' : '🛡️'}</span><p className="text-slate-500 font-bold text-lg">Nenhum e-mail {abaFila} no momento.</p></div>
             ) : (
               <div className="divide-y divide-slate-100">
                 {filaFiltrada.map(item => (
                   <div key={item.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
-                    
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
                         <p className="font-bold text-slate-900">{item.nome} <span className="text-sm font-normal text-slate-500">({item.email})</span></p>
-                        
-                        {abaFila === 'enviado' && (
-                          item.clicou ? (
-                            <span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold tracking-wide border border-emerald-200">🎯 Clicou</span>
-                          ) : (
-                            <span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold tracking-wide border border-slate-200">🙈 Ignorou</span>
-                          )
-                        )}
-                        {item.provedor && (
-                          <span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold tracking-wide border border-blue-200">
-                            {item.provedor}
-                          </span>
-                        )}
+                        {abaFila === 'enviado' && (item.clicou ? <span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold">🎯 Clicou</span> : <span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold">🙈 Ignorou</span>)}
+                        {item.provedor && <span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold">{item.provedor}</span>}
                       </div>
                       <p className="text-sm text-slate-600 mt-1">Assunto: <span className="italic">{item.assunto}</span></p>
                     </div>
-                    
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">
-                            {abaFila === 'pendente' ? 'Agendado' : abaFila === 'enviado' ? 'Disparado' : 'Falha'}
-                        </p>
-                        <p className={`text-sm font-bold px-3 py-1 rounded-md mt-1 ${abaFila === 'pendente' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}>
-                          {new Date(item.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase">{abaFila === 'pendente' ? 'Agendado' : abaFila === 'enviado' ? 'Disparado' : 'Falha'}</p>
+                        <p className={`text-sm font-bold px-3 py-1 rounded-md mt-1 ${abaFila === 'pendente' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}>{new Date(item.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
-                      
-                      <button onClick={() => removerDaFila(item.id)} className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-colors">
-                        🗑️ {abaFila === 'pendente' ? 'Cancelar' : 'Excluir'}
-                      </button>
+                      <button onClick={() => removerDaFila(item.id)} className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200">🗑️ {abaFila === 'pendente' ? 'Cancelar' : 'Excluir'}</button>
                     </div>
                   </div>
                 ))}
@@ -663,7 +566,14 @@ export default function AdminPage() {
                  {perfis.map((p) => (
                    <label key={p.id} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 ${selecionados.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
                      <input type="checkbox" checked={selecionados.includes(p.id)} onChange={() => toggleSelecao(p.id)} className="size-5 text-blue-600 rounded" />
-                     <div className="flex-1"><p className="font-bold text-slate-900">{p.nome}</p></div>
+                     
+                     {/* E-MAIL ADICIONADO NA LISTA DE SELEÇÃO */}
+                     <div className="flex-1">
+                       <p className="font-bold text-slate-900">
+                         {p.nome} <span className="font-normal text-sm text-slate-500 ml-2">({p.email})</span>
+                       </p>
+                     </div>
+
                    </label>
                  ))}
                </div>
@@ -671,7 +581,6 @@ export default function AdminPage() {
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
                <h3 className="font-bold text-xl text-slate-900 mb-6">Configurar Lote</h3>
                <form onSubmit={dispararCampanhaMassa} className="space-y-4">
-                 
                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg mb-4">
                     <label className="block text-xs uppercase tracking-wide font-bold text-slate-700 mb-3">Motor de Envio</label>
                     <div className="flex flex-col gap-3">
@@ -685,7 +594,6 @@ export default function AdminPage() {
                       </label>
                     </div>
                  </div>
-
                  <div className="grid grid-cols-2 gap-3 mb-4">
                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
                      <label className="block text-xs font-bold text-slate-700 mb-1">Max. Seleção</label>
@@ -702,7 +610,7 @@ export default function AdminPage() {
                    <div><label className="block text-xs font-bold mb-1">Texto do Botão</label><input type="text" required value={textoBotao} onChange={e => setTextoBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
                    <div><label className="block text-xs font-bold mb-1">Link de Destino</label><input type="url" required value={urlBotao} onChange={e => setUrlBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
                  </div>
-                 <button type="submit" disabled={enviandoMassa || selecionados.length === 0} className="w-full mt-4 bg-blue-600 text-white font-bold p-4 rounded-lg hover:bg-blue-700 transition-all shadow-md">
+                 <button type="submit" disabled={enviandoMassa || selecionados.length === 0} className="w-full mt-4 bg-blue-600 text-white font-bold p-4 rounded-lg hover:bg-blue-700 shadow-md">
                    {enviandoMassa ? 'Aguarde...' : `Enviar Lotes`}
                  </button>
                </form>
