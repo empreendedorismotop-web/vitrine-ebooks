@@ -11,9 +11,10 @@ type Perfil = {
   id: string
   nome: string
   email: string
+  telefone?: string // Mantido para o WhatsApp
   link_site: string 
   titulo_ebook: string
-  descricao?: string // Adicionado
+  descricao?: string 
   plano_selecionado: string
   status: string
   data_expiracao?: string
@@ -42,9 +43,9 @@ type FilaItem = {
 
 export default function AdminPage() {
   const router = useRouter()
-  const [autorizado, setAutorizado] = useState(false) // Trava de segurança
+  const [autorizado, setAutorizado] = useState(false) 
 
-  // ⚠️ COLOQUE SEU E-MAIL DE ADMIN AQUI ⚠️
+  // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
 
   const [perfis, setPerfis] = useState<Perfil[]>([])
@@ -64,27 +65,23 @@ export default function AdminPage() {
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
-  // Estados dos Modais
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
   const [diasInatividade, setDiasInatividade] = useState(90)
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
-  const [uploading, setUploading] = useState(false) // Upload no admin
+  const [uploading, setUploading] = useState(false) 
 
   useEffect(() => {
     verificarSeguranca()
   }, [])
 
-  // --- NOVA FUNÇÃO DE SEGURANÇA BLINDADA ---
   const verificarSeguranca = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     
-    // Se não estiver logado OU o email não for o do ADMIN, manda vazar
     if (!user || user.email !== EMAIL_ADMIN) {
       router.push('/login')
       return
     }
     
-    // Passou na segurança! Carrega o painel
     setAutorizado(true)
     carregarPerfis()
     carregarFila()
@@ -108,10 +105,17 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
+  // --- FUNÇÃO PARA FORMATAR O LINK DO WHATSAPP ---
+  const formatarLinkWhatsApp = (numero?: string) => {
+    if (!numero) return '#'
+    const apenasNumeros = numero.replace(/\D/g, '')
+    return apenasNumeros.startsWith('55') ? `https://wa.me/${apenasNumeros}` : `https://wa.me/55${apenasNumeros}`
+  }
+
   const baixarCSV = () => {
-    const cabecalho = ['Nome', 'Email', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
+    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
     const linhas = perfis.map(p => [
-        `"${p.nome || ''}"`, `"${p.email || ''}"`, `"${p.status || ''}"`, `"${p.plano_selecionado || ''}"`,
+        `"${p.nome || ''}"`, `"${p.email || ''}"`, `"${p.telefone || ''}"`, `"${p.status || ''}"`, `"${p.plano_selecionado || ''}"`,
         `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`, `"${p.cliques?.length || 0}"`,
         `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`
     ])
@@ -152,7 +156,6 @@ export default function AdminPage() {
     }
   }
 
-  // --- FUNÇÃO DE UPLOAD PARA O MODO DEUS ---
   const handleUploadCapaAdmin = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploading(true)
@@ -174,7 +177,6 @@ export default function AdminPage() {
     }
   }
 
-  // --- SALVAR EDIÇÃO MODO DEUS ---
   const salvarEdicaoAnuncio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!perfilEditando) return;
@@ -327,7 +329,6 @@ export default function AdminPage() {
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const filaFiltrada = fila.filter(item => item.status === abaFila)
 
-  // TELA DE CARREGAMENTO ENQUANTO VERIFICA SEGURANÇA
   if (!autorizado) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">Verificando Credenciais...</div>
   }
@@ -335,7 +336,6 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
-      {/* --- O NOVO EDITOR "MODO DEUS" COMPLETO --- */}
       {perfilEditando && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -370,7 +370,6 @@ export default function AdminPage() {
                   <textarea rows={4} value={perfilEditando.descricao || ''} onChange={e => setPerfilEditando({...perfilEditando, descricao: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Texto que aparece na vitrine..." />
                 </div>
                 
-                {/* UPLOAD DE IMAGEM IDÊNTICO AO DO CLIENTE */}
                 <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
                     <label className="block text-sm font-bold text-slate-900 mb-2">Capa do Material</label>
                     <input 
@@ -398,7 +397,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* --- OVERLAY DO MODAL DE LIMPEZA DE LISTA --- */}
       {modalLimpezaAberto && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -489,8 +487,25 @@ export default function AdminPage() {
                   <div key={perfil.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
                     <div>
                       <h3 className="font-bold text-slate-900">{perfil.nome}</h3>
-                      <p className="text-sm text-slate-600">{perfil.email} | Site: {perfil.link_site || 'Não informado'}</p>
                       
+                      {/* --- EMAIL E BOTÃO DO WHATSAPP AQUI --- */}
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-slate-600">{perfil.email}</p>
+                        
+                        {perfil.telefone && (
+                          <a 
+                            href={formatarLinkWhatsApp(perfil.telefone)} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1"
+                          >
+                            💬 Whats
+                          </a>
+                        )}
+                        <span className="text-slate-300">|</span>
+                        <p className="text-sm text-slate-600">Site: {perfil.link_site || 'Não informado'}</p>
+                      </div>
+
                       <div className="flex flex-wrap items-center gap-2 mt-3">
                         <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
                           <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
@@ -614,11 +629,27 @@ export default function AdminPage() {
                  {perfis.map((p) => (
                    <label key={p.id} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 ${selecionados.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
                      <input type="checkbox" checked={selecionados.includes(p.id)} onChange={() => toggleSelecao(p.id)} className="size-5 text-blue-600 rounded" />
+                     
                      <div className="flex-1">
-                       <p className="font-bold text-slate-900">
-                         {p.nome} <span className="font-normal text-sm text-slate-500 ml-2">({p.email})</span>
+                       <p className="font-bold text-slate-900 flex items-center gap-2">
+                         {p.nome} 
+                         <span className="font-normal text-sm text-slate-500">({p.email})</span>
+                         
+                         {/* --- BOTÃO WHATSAPP NA LISTA DE CAMPANHAS --- */}
+                         {p.telefone && (
+                           <a 
+                             href={formatarLinkWhatsApp(p.telefone)} 
+                             target="_blank" 
+                             rel="noopener noreferrer" 
+                             onClick={(e) => e.stopPropagation()} 
+                             className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors"
+                           >
+                             💬 Whats
+                           </a>
+                         )}
                        </p>
                      </div>
+
                    </label>
                  ))}
                </div>
