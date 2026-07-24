@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 type Clique = { origem: string }
@@ -12,6 +13,7 @@ type Perfil = {
   email: string
   link_site: string 
   titulo_ebook: string
+  descricao?: string // Adicionado
   plano_selecionado: string
   status: string
   data_expiracao?: string
@@ -39,6 +41,12 @@ type FilaItem = {
 }
 
 export default function AdminPage() {
+  const router = useRouter()
+  const [autorizado, setAutorizado] = useState(false) // Trava de segurança
+
+  // ⚠️ COLOQUE SEU E-MAIL DE ADMIN AQUI ⚠️
+  const EMAIL_ADMIN = 'josevg10@gmail.com' 
+
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [fila, setFila] = useState<FilaItem[]>([]) 
   const [abaAtiva, setAbaAtiva] = useState('pendente')
@@ -59,17 +67,31 @@ export default function AdminPage() {
   // Estados dos Modais
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
   const [diasInatividade, setDiasInatividade] = useState(90)
-  const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null) // NOVO: Controle da edição rápida
+  const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
+  const [uploading, setUploading] = useState(false) // Upload no admin
 
   useEffect(() => {
+    verificarSeguranca()
+  }, [])
+
+  // --- NOVA FUNÇÃO DE SEGURANÇA BLINDADA ---
+  const verificarSeguranca = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    // Se não estiver logado OU o email não for o do ADMIN, manda vazar
+    if (!user || user.email !== EMAIL_ADMIN) {
+      router.push('/login')
+      return
+    }
+    
+    // Passou na segurança! Carrega o painel
+    setAutorizado(true)
     carregarPerfis()
     carregarFila()
     
-    const intervalo = setInterval(() => {
-      carregarFila()
-    }, 15000)
+    const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
-  }, [])
+  }
 
   const carregarPerfis = async () => {
     const { data } = await supabase.from('profiles').select('*, cliques(origem)').order('created_at', { ascending: false })
@@ -89,14 +111,9 @@ export default function AdminPage() {
   const baixarCSV = () => {
     const cabecalho = ['Nome', 'Email', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
     const linhas = perfis.map(p => [
-        `"${p.nome || ''}"`,
-        `"${p.email || ''}"`,
-        `"${p.status || ''}"`,
-        `"${p.plano_selecionado || ''}"`,
-        `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`,
-        `"${p.cliques?.length || 0}"`,
-        `"${p.posicao_fixa || 'Nenhuma'}"`,
-        `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`
+        `"${p.nome || ''}"`, `"${p.email || ''}"`, `"${p.status || ''}"`, `"${p.plano_selecionado || ''}"`,
+        `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`, `"${p.cliques?.length || 0}"`,
+        `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`
     ])
     const conteudo = [cabecalho, ...linhas].map(e => e.join(',')).join('\n')
     const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' })
@@ -135,7 +152,29 @@ export default function AdminPage() {
     }
   }
 
-  // --- NOVA FUNÇÃO: SALVAR EDIÇÃO RÁPIDA ---
+  // --- FUNÇÃO DE UPLOAD PARA O MODO DEUS ---
+  const handleUploadCapaAdmin = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true)
+      const file = e.target.files?.[0]
+      if (!file || !perfilEditando) { setUploading(false); return }
+
+      const extensao = file.name.split('.').pop()
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${extensao}`
+      
+      const { error: uploadError } = await supabase.storage.from('imagens').upload(fileName, file)
+      if (uploadError) throw uploadError
+
+      const { data } = supabase.storage.from('imagens').getPublicUrl(fileName)
+      setPerfilEditando(prev => prev ? { ...prev, imagem_url: data.publicUrl } : null)
+    } catch (error: any) {
+      mostrarNotificacao('Erro ao enviar imagem.', 'erro')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // --- SALVAR EDIÇÃO MODO DEUS ---
   const salvarEdicaoAnuncio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!perfilEditando) return;
@@ -143,6 +182,7 @@ export default function AdminPage() {
     const { error } = await supabase.from('profiles').update({
       nome: perfilEditando.nome,
       titulo_ebook: perfilEditando.titulo_ebook,
+      descricao: perfilEditando.descricao, 
       link_site: perfilEditando.link_site,
       imagem_url: perfilEditando.imagem_url
     }).eq('id', perfilEditando.id);
@@ -150,9 +190,9 @@ export default function AdminPage() {
     if (error) {
       mostrarNotificacao('Erro ao salvar as edições do anúncio.', 'erro');
     } else {
-      mostrarNotificacao('Anúncio do cliente atualizado com sucesso!', 'sucesso');
-      setPerfilEditando(null); // Fecha o modal
-      carregarPerfis(); // Atualiza a lista na tela
+      mostrarNotificacao('Anúncio atualizado com sucesso!', 'sucesso');
+      setPerfilEditando(null); 
+      carregarPerfis(); 
     }
   }
 
@@ -166,13 +206,13 @@ export default function AdminPage() {
     const valorParaSalvar = posicao === 'nenhuma' ? null : Number(posicao);
     const { error } = await supabase.from('profiles').update({ posicao_fixa: valorParaSalvar }).eq('id', id)
     if (error) mostrarNotificacao('Erro ao alterar posição VIP.', 'erro')
-    else { mostrarNotificacao('Posição VIP atualizada com sucesso!', 'sucesso'); carregarPerfis() }
+    else { mostrarNotificacao('Posição VIP atualizada!', 'sucesso'); carregarPerfis() }
   }
 
   const mudarPlano = async (id: string, novoPlano: string) => {
     const { error } = await supabase.from('profiles').update({ plano_selecionado: novoPlano }).eq('id', id)
     if (error) mostrarNotificacao('Erro ao alterar plano.', 'erro')
-    else { mostrarNotificacao('Plano atualizado com sucesso!', 'sucesso'); carregarPerfis() }
+    else { mostrarNotificacao('Plano atualizado!', 'sucesso'); carregarPerfis() }
   }
 
   const mudarDataExpiracao = async (id: string, novaData: string) => {
@@ -182,70 +222,53 @@ export default function AdminPage() {
   }
 
   const excluirPerfil = async (id: string) => {
-    if (confirm('Tem certeza que deseja EXCLUIR este cliente definitivamente?')) {
+    if (confirm('EXCLUIR este cliente definitivamente?')) {
       await supabase.from('profiles').delete().eq('id', id)
-      mostrarNotificacao('Cliente excluído com sucesso.', 'sucesso')
+      mostrarNotificacao('Cliente excluído.', 'sucesso')
       carregarPerfis()
     }
   }
 
   const dispararLembretePendente = async (perfil: Perfil) => {
-    if (confirm(`Deseja enviar um lembrete de ativação para ${perfil.nome}?`)) {
+    if (confirm(`Enviar lembrete de ativação para ${perfil.nome}?`)) {
       fetch('/api/enviar-lembrete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: perfil.email, nome: perfil.nome, titulo: perfil.titulo_ebook || '', plano: perfil.plano_selecionado || '' })
-      }).catch(err => console.error('Erro silencioso:', err))
+      }).catch(err => console.error(err))
 
       const novoEnvio = {
-        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome,
-        assunto: `Finalize seu cadastro, ${perfil.nome.split(' ')[0]}!`,
-        mensagem: 'Notamos que seu anúncio ainda está aguardando ativação. Escolha um plano agora mesmo para publicar sua oferta!',
-        texto_botao: 'Ativar Anúncio Agora', url_botao: `${window.location.origin}/planos`, base_url: window.location.origin,
-        status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
+        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome, assunto: `Finalize seu cadastro!`,
+        mensagem: 'Notamos que seu anúncio aguarda ativação. Escolha um plano para publicar sua oferta!', texto_botao: 'Ativar Agora', 
+        url_botao: `${window.location.origin}/planos`, base_url: window.location.origin, status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
-      mostrarNotificacao('Lembrete enviado e rastreio adicionado à Fila!', 'sucesso')
+      mostrarNotificacao('Lembrete na Fila!', 'sucesso')
       carregarFila()
     }
   }
 
   const dispararLembreteInativo = async (perfil: Perfil) => {
-    if (confirm(`Deseja enviar um e-mail de renovação para ${perfil.nome}?`)) {
+    if (confirm(`Enviar renovação para ${perfil.nome}?`)) {
       const novoEnvio = {
-        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome,
-        assunto: `⚠️ Seu acesso expirou, ${perfil.nome.split(' ')[0]}!`,
-        mensagem: 'Notamos que o seu plano expirou e seu anúncio foi pausado. Clique abaixo para escolher um novo plano e reativar.',
-        texto_botao: 'Ver Planos e Renovar', url_botao: `${window.location.origin}/planos`, base_url: window.location.origin,
-        status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
+        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome, assunto: `⚠️ Seu acesso expirou!`,
+        mensagem: 'Seu plano expirou e seu anúncio foi pausado. Clique para renovar.', texto_botao: 'Renovar', 
+        url_botao: `${window.location.origin}/planos`, base_url: window.location.origin, status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
-      mostrarNotificacao('Lembrete de renovação enviado para a Fila!', 'sucesso')
+      mostrarNotificacao('Renovação na Fila!', 'sucesso')
       setAbaAtiva('fila'); setAbaFila('pendente'); carregarFila()
     }
   }
 
-  const removerDaFila = async (id: string) => {
-    await supabase.from('fila_envios').delete().eq('id', id); mostrarNotificacao('Deletado com sucesso.', 'sucesso'); carregarFila()
-  }
-
-  const limparHistoricoEnviados = async () => {
-    if (confirm('Apagar TODO o histórico de e-mails enviados?')) {
-      await supabase.from('fila_envios').delete().eq('status', 'enviado'); mostrarNotificacao('Histórico limpo.', 'sucesso'); carregarFila()
-    }
-  }
-
-  const esvaziarFila = async () => {
-    if (confirm('Cancelar TODOS os envios PENDENTES?')) {
-      await supabase.from('fila_envios').delete().eq('status', 'pendente'); carregarFila(); mostrarNotificacao('Fila esvaziada.', 'sucesso');
-    }
-  }
+  const removerDaFila = async (id: string) => { await supabase.from('fila_envios').delete().eq('id', id); carregarFila() }
+  const limparHistoricoEnviados = async () => { if (confirm('Apagar TODO o histórico?')) { await supabase.from('fila_envios').delete().eq('status', 'enviado'); carregarFila() } }
+  const esvaziarFila = async () => { if (confirm('Cancelar PENDENTES?')) { await supabase.from('fila_envios').delete().eq('status', 'pendente'); carregarFila(); } }
 
   const reenviarParaNaoClicadores = async () => {
     const naoClicaram = fila.filter(item => item.status === 'enviado' && !item.clicou)
-    if (naoClicaram.length === 0) return mostrarNotificacao('Todos os clientes já clicaram!', 'sucesso')
+    if (naoClicaram.length === 0) return mostrarNotificacao('Todos já clicaram!', 'sucesso')
 
-    if (confirm(`Agendar o reenvio para os ${naoClicaram.length} clientes que ignoraram o e-mail?`)) {
+    if (confirm(`Reenviar para ${naoClicaram.length} clientes que ignoraram?`)) {
       setEnviandoMassa(true)
       const registrosFila = []
       let tempoAgendado = new Date() 
@@ -253,10 +276,9 @@ export default function AdminPage() {
         const lote = naoClicaram.slice(i, i + 2)
         for (const item of lote) {
           registrosFila.push({
-            perfil_id: item.perfil_id, email: item.email, nome: item.nome,
-            assunto: `[Lembrete] ${item.assunto}`,
-            mensagem: item.mensagem || 'Notamos que você não abriu nosso último e-mail. Aqui está o link novamente!',
-            texto_botao: item.texto_botao || 'Acessar Agora', url_botao: item.url_botao || window.location.origin, base_url: item.base_url || window.location.origin,
+            perfil_id: item.perfil_id, email: item.email, nome: item.nome, assunto: `[Lembrete] ${item.assunto}`,
+            mensagem: item.mensagem || 'Você não abriu nosso último e-mail. Aqui está!', texto_botao: item.texto_botao || 'Acessar Agora', 
+            url_botao: item.url_botao || window.location.origin, base_url: item.base_url || window.location.origin,
             status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -270,7 +292,7 @@ export default function AdminPage() {
 
   const dispararCampanhaMassa = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (selecionados.length === 0) return mostrarNotificacao('Selecione pelo menos um cliente.', 'erro')
+    if (selecionados.length === 0) return mostrarNotificacao('Selecione um cliente.', 'erro')
     setEnviandoMassa(true)
     
     const listaFinalIds = selecionados.slice(0, qtdEnvioDesejada)
@@ -281,22 +303,20 @@ export default function AdminPage() {
     try {
       const registrosFila = []
       let tempoAgendado = new Date()
-
       for (let i = 0; i < lotes.length; i++) {
         for (const cliente of lotes[i]) {
           registrosFila.push({
-            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome,
-            assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,               
+            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome, assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,               
             base_url: window.location.origin, status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
           })
         }
         tempoAgendado = new Date(tempoAgendado.getTime() + (intervaloLote * 60000))
       }
       await supabase.from('fila_envios').insert(registrosFila)
-      mostrarNotificacao(`Sucesso! ${listaFinalIds.length} e-mails agendados.`, 'sucesso')
+      mostrarNotificacao(`Sucesso! ${listaFinalIds.length} agendados.`, 'sucesso')
       setSelecionados([]); setAssuntoCampanha(''); setTextoCampanha(''); setTextoBotao(''); setUrlBotao('')
       carregarFila() 
-    } catch (error) { mostrarNotificacao('Erro ao enfileirar.', 'erro') }
+    } catch (error) { mostrarNotificacao('Erro.', 'erro') }
     setEnviandoMassa(false)
   }
 
@@ -307,44 +327,73 @@ export default function AdminPage() {
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const filaFiltrada = fila.filter(item => item.status === abaFila)
 
+  // TELA DE CARREGAMENTO ENQUANTO VERIFICA SEGURANÇA
+  if (!autorizado) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">Verificando Credenciais...</div>
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
-      {/* --- MODAL: EDIÇÃO RÁPIDA DE ANÚNCIO (ADMIN) --- */}
+      {/* --- O NOVO EDITOR "MODO DEUS" COMPLETO --- */}
       {perfilEditando && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-5 border-b border-slate-100 bg-purple-50 flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-bold text-purple-900">✏️ Editar Anúncio</h2>
+                <h2 className="text-xl font-bold text-purple-900">✏️ Editar Anúncio (Admin)</h2>
                 <p className="text-purple-700 text-xs mt-1">Alterando dados de: <strong>{perfilEditando.email}</strong></p>
               </div>
               <button onClick={() => setPerfilEditando(null)} className="text-purple-400 hover:text-purple-700 text-2xl font-bold">&times;</button>
             </div>
             
-            <form onSubmit={salvarEdicaoAnuncio} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Cliente / Empresa</label>
-                <input type="text" value={perfilEditando.nome || ''} onChange={e => setPerfilEditando({...perfilEditando, nome: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" required />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Título do E-book / Produto</label>
-                <input type="text" value={perfilEditando.titulo_ebook || ''} onChange={e => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino (Site ou WhatsApp)</label>
-                <input type="url" value={perfilEditando.link_site || ''} onChange={e => setPerfilEditando({...perfilEditando, link_site: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Link da Imagem (URL)</label>
-                <input type="url" value={perfilEditando.imagem_url || ''} onChange={e => setPerfilEditando({...perfilEditando, imagem_url: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none text-sm" placeholder="https://..." />
-              </div>
-              
-              <div className="pt-4 flex gap-3 justify-end border-t border-slate-100 mt-6">
-                <button type="button" onClick={() => setPerfilEditando(null)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
-                <button type="submit" className="px-5 py-2 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md">Salvar Alterações</button>
-              </div>
-            </form>
+            <div className="p-6 overflow-y-auto flex-1">
+              <form onSubmit={salvarEdicaoAnuncio} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Nome / Autor</label>
+                    <input type="text" value={perfilEditando.nome || ''} onChange={e => setPerfilEditando({...perfilEditando, nome: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Título do Material</label>
+                    <input type="text" value={perfilEditando.titulo_ebook || ''} onChange={e => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino</label>
+                  <input type="url" value={perfilEditando.link_site || ''} onChange={e => setPerfilEditando({...perfilEditando, link_site: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label>
+                  <textarea rows={4} value={perfilEditando.descricao || ''} onChange={e => setPerfilEditando({...perfilEditando, descricao: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Texto que aparece na vitrine..." />
+                </div>
+                
+                {/* UPLOAD DE IMAGEM IDÊNTICO AO DO CLIENTE */}
+                <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
+                    <label className="block text-sm font-bold text-slate-900 mb-2">Capa do Material</label>
+                    <input 
+                      type="file" accept="image/*" onChange={handleUploadCapaAdmin} disabled={uploading}
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 transition-colors cursor-pointer mb-2" 
+                    />
+                    {uploading && <p className="text-sm font-bold text-purple-600 animate-pulse mt-2">Enviando imagem...</p>}
+                    {perfilEditando.imagem_url && !uploading && (
+                      <div className="mt-4 flex flex-col items-start bg-white p-4 rounded-lg border border-slate-200">
+                        <span className="text-xs font-bold text-slate-400 mb-2 uppercase">Capa Atual</span>
+                        <img src={perfilEditando.imagem_url} alt="Capa" className="h-32 object-contain rounded shadow-sm" />
+                      </div>
+                    )}
+                </div>
+                
+                <div className="pt-4 flex gap-3 justify-end border-t border-slate-100 mt-6">
+                  <button type="button" onClick={() => setPerfilEditando(null)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
+                  <button type="submit" disabled={uploading} className="px-5 py-2 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md disabled:opacity-50">
+                    {uploading ? 'Aguarde...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -468,7 +517,6 @@ export default function AdminPage() {
                     
                     <div className="flex flex-wrap gap-2 shrink-0">
                       
-                      {/* BOTÃO MÁGICO DE EDIÇÃO PARA O ADMIN */}
                       <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200">
                         ✏️ Editar
                       </button>
@@ -566,14 +614,11 @@ export default function AdminPage() {
                  {perfis.map((p) => (
                    <label key={p.id} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 ${selecionados.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
                      <input type="checkbox" checked={selecionados.includes(p.id)} onChange={() => toggleSelecao(p.id)} className="size-5 text-blue-600 rounded" />
-                     
-                     {/* E-MAIL ADICIONADO NA LISTA DE SELEÇÃO */}
                      <div className="flex-1">
                        <p className="font-bold text-slate-900">
                          {p.nome} <span className="font-normal text-sm text-slate-500 ml-2">({p.email})</span>
                        </p>
                      </div>
-
                    </label>
                  ))}
                </div>
