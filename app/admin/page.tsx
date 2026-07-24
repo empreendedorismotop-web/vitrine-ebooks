@@ -35,7 +35,7 @@ type FilaItem = {
   agendado_para: string
   status: string
   clicou?: boolean
-  provedor?: string // Adicionado para suportar múltiplos SMTPs
+  provedor?: string 
 }
 
 export default function AdminPage() {
@@ -46,16 +46,19 @@ export default function AdminPage() {
   const [notificacao, setNotificacao] = useState({ mostrar: false, msg: '', tipo: '' })
   const [selecionados, setSelecionados] = useState<string[]>([])
   
-  // Estados do formulário de campanha
   const [assuntoCampanha, setAssuntoCampanha] = useState('')
   const [textoCampanha, setTextoCampanha] = useState('')
   const [textoBotao, setTextoBotao] = useState('')
   const [urlBotao, setUrlBotao] = useState('')
-  const [provedor, setProvedor] = useState('gmail') // Estado do seletor de SMTP
+  const [provedor, setProvedor] = useState('gmail') 
   const [qtdEnvioDesejada, setQtdEnvioDesejada] = useState(50)
   const [tamanhoLote, setTamanhoLote] = useState(2) 
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
+
+  // --- ESTADOS DO MODAL DE LIMPEZA ---
+  const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
+  const [diasInatividade, setDiasInatividade] = useState(90) // Padrão recomendado: 90 dias
 
   useEffect(() => {
     carregarPerfis()
@@ -82,7 +85,6 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
-  // --- FUNÇÕES DE EXPORTAÇÃO E LIMPEZA (NOVAS) ---
   const baixarCSV = () => {
     const cabecalho = ['Nome', 'Email', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
     const linhas = perfis.map(p => [
@@ -105,27 +107,42 @@ export default function AdminPage() {
     document.body.removeChild(link)
   }
 
-  const limparFrios = async () => {
-    if (confirm('ATENÇÃO: Deseja excluir DEFINITIVAMENTE todos os clientes Inativos que NUNCA clicaram em nenhum e-mail? Isso manterá sua lista saudável.')) {
-      const inativosFrios = perfis.filter(p => p.status === 'inativo' && (!p.cliques || p.cliques.length === 0))
-      
-      if (inativosFrios.length === 0) {
-        return mostrarNotificacao('Sua lista já está saudável! Nenhum inativo sem cliques.', 'sucesso')
-      }
+  // A LÓGICA DE SEGURANÇA: Data limite e filtro estrito
+  const dataLimite = new Date()
+  dataLimite.setDate(dataLimite.getDate() - diasInatividade)
 
-      const idsParaExcluir = inativosFrios.map(p => p.id)
-      const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
-      
-      if (error) {
-        mostrarNotificacao('Erro ao limpar contatos.', 'erro')
-      } else {
-        mostrarNotificacao(`${idsParaExcluir.length} contatos frios excluídos com sucesso!`, 'sucesso')
-        carregarPerfis()
-      }
+  const contatosFrios = perfis.filter(p => {
+    // TRAVA DE SEGURANÇA 1: Se estiver Ativo ou Pendente, o sistema ignora (protegido).
+    if (p.status !== 'inativo') return false
+    
+    // TRAVA DE SEGURANÇA 2: Se já clicou em algum e-mail, está a salvo.
+    const clicouAlgumaVez = p.cliques && p.cliques.length > 0
+    if (clicouAlgumaVez) return false
+
+    // TRAVA DE SEGURANÇA 3: Só pega quem foi cadastrado ANTES da data limite (ex: 90 dias atrás).
+    const dataCadastro = p.created_at ? new Date(p.created_at) : new Date()
+    return dataCadastro < dataLimite
+  })
+
+  const executarLimpezaFrios = async () => {
+    const idsParaExcluir = contatosFrios.map(p => p.id)
+    
+    if (idsParaExcluir.length === 0) {
+      setModalLimpezaAberto(false)
+      return mostrarNotificacao('Nenhum contato inativo antigo encontrado.', 'sucesso')
+    }
+
+    const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
+    
+    if (error) {
+      mostrarNotificacao('Erro ao limpar contatos.', 'erro')
+    } else {
+      mostrarNotificacao(`${idsParaExcluir.length} contatos frios excluídos com sucesso!`, 'sucesso')
+      setModalLimpezaAberto(false)
+      carregarPerfis()
     }
   }
 
-  // --- FUNÇÕES DE GERENCIAMENTO DE CLIENTES ---
   const mudarStatus = async (id: string, novoStatus: string) => {
     await supabase.from('profiles').update({ status: novoStatus }).eq('id', id)
     mostrarNotificacao(`Status alterado para ${novoStatus.toUpperCase()}`, 'sucesso')
@@ -231,7 +248,6 @@ export default function AdminPage() {
     }
   }
 
-  // --- FUNÇÕES DA FILA E HISTÓRICO ---
   const removerDaFila = async (id: string) => {
     await supabase.from('fila_envios').delete().eq('id', id)
     mostrarNotificacao('Deletado com sucesso.', 'sucesso')
@@ -284,7 +300,7 @@ export default function AdminPage() {
             base_url: item.base_url || window.location.origin,
             status: 'pendente',
             clicou: false,
-            provedor: provedor, // Reutiliza a escolha atual
+            provedor: provedor, 
             agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -299,7 +315,6 @@ export default function AdminPage() {
     }
   }
 
-  // --- FUNÇÕES DE CAMPANHAS EM MASSA ---
   const dispararCampanhaMassa = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selecionados.length === 0) return mostrarNotificacao('Selecione pelo menos um cliente.', 'erro')
@@ -327,7 +342,7 @@ export default function AdminPage() {
             base_url: window.location.origin,  
             status: 'pendente',
             clicou: false, 
-            provedor: provedor, // Envia o provedor escolhido para a Fila
+            provedor: provedor, 
             agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -353,6 +368,82 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
+      
+      {/* --- OVERLAY DO MODAL DE LIMPEZA DE LISTA --- */}
+      {modalLimpezaAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-2xl font-bold text-slate-900">Limpeza de Contatos Frios</h2>
+              <p className="text-slate-500 text-sm mt-1">Exclua leads que esfriaram para proteger o domínio e as suas campanhas.</p>
+            </div>
+
+            <div className="p-6 flex-1 overflow-y-auto">
+              
+              {/* ALERTA DE SEGURANÇA VISUAL NOVO */}
+              <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                <span className="text-xl">🛡️</span>
+                <div>
+                  <p className="font-bold text-emerald-800 text-sm mb-1">Trava de Segurança Ativada</p>
+                  <p className="text-xs text-emerald-700">Fique tranquilo! Clientes com anúncios <strong>Ativos</strong> ou <strong>Pendentes</strong> estão blindados. O sistema buscará apenas os contatos que já estão na sua aba de <strong>Inativos</strong>.</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-slate-700 mb-2">Selecione o Período de Inatividade Absoluta:</label>
+                <select 
+                  value={diasInatividade} 
+                  onChange={(e) => setDiasInatividade(Number(e.target.value))}
+                  className="w-full p-3 border border-slate-200 rounded-lg outline-none font-bold text-slate-800 bg-white"
+                >
+                  <option value={30}>Há mais de 30 dias (1 Mês)</option>
+                  <option value={60}>Há mais de 60 dias (2 Meses)</option>
+                  <option value={90}>Há mais de 90 dias (3 Meses - Recomendado)</option>
+                  <option value={120}>Há mais de 120 dias (4 Meses)</option>
+                </select>
+              </div>
+
+              <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
+                <p className="font-bold text-rose-800 mb-3 text-sm">
+                  {contatosFrios.length === 0 
+                    ? `Nenhum contato INATIVO e SEM CLIQUES cadastrado há mais de ${diasInatividade} dias foi encontrado.` 
+                    : `⚠️ ${contatosFrios.length} contato(s) inativo(s) se encaixa(m) nessa regra e será(ão) excluído(s):`}
+                </p>
+                
+                {contatosFrios.length > 0 && (
+                  <div className="max-h-[200px] overflow-y-auto divide-y divide-rose-200/50 pr-2">
+                    {contatosFrios.map(p => (
+                      <div key={p.id} className="py-2 flex justify-between items-center">
+                        <span className="text-sm font-bold text-slate-700">{p.nome}</span>
+                        <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded-md">{p.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setModalLimpezaAberto(false)} 
+                className="px-6 py-2.5 rounded-lg font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={executarLimpezaFrios}
+                disabled={contatosFrios.length === 0}
+                className={`px-6 py-2.5 rounded-lg font-bold text-white transition-colors ${contatosFrios.length === 0 ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 shadow-md'}`}
+              >
+                Confirmar e Excluir
+              </button>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
       {notificacao.mostrar && (
         <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl font-bold text-white transition-all transform translate-y-0 ${notificacao.tipo === 'sucesso' ? 'bg-emerald-600' : 'bg-red-600'}`}>
           {notificacao.msg}
@@ -367,18 +458,16 @@ export default function AdminPage() {
             </Link>
         </div>
 
-        {/* --- MENU DE NAVEGAÇÃO SUPERIOR --- */}
         <div className="flex flex-wrap items-center gap-3 mb-8 border-b border-slate-200 pb-4">
           <button onClick={() => setAbaAtiva('pendente')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'pendente' ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-600 border'}`}>Pendentes</button>
           <button onClick={() => setAbaAtiva('ativo')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'ativo' ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-slate-600 border'}`}>Ativos</button>
           <button onClick={() => setAbaAtiva('inativo')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'inativo' ? 'bg-red-100 text-red-800' : 'bg-white text-slate-600 border'}`}>Inativos</button>
           
-          {/* NOVOS BOTÕES GLOBAIS */}
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
              <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm transition-all">
                📊 Baixar CSV
              </button>
-             <button onClick={limparFrios} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm transition-all">
+             <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm transition-all">
                🧹 Limpar Frios
              </button>
           </div>
@@ -389,7 +478,6 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('campanhas')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'campanhas' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 border'}`}>📧 Disparos</button>
         </div>
 
-        {/* --- 1. LISTA DE CLIENTES (Pendentes / Ativos / Inativos) --- */}
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             {perfisFiltrados.length === 0 ? (
@@ -404,7 +492,6 @@ export default function AdminPage() {
                       <h3 className="font-bold text-slate-900">{perfil.nome}</h3>
                       <p className="text-sm text-slate-600">{perfil.email} | Site: {perfil.link_site || 'Não informado'}</p>
                       
-                      {/* --- CONTROLES DE PLANO E VIP DO ADMIN --- */}
                       <div className="flex flex-wrap items-center gap-2 mt-3">
                         
                         <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
@@ -477,7 +564,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* --- 2. ABA FILA DE ESPERA E ENVIADOS --- */}
         {abaAtiva === 'fila' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4">
@@ -531,7 +617,6 @@ export default function AdminPage() {
                             <span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold tracking-wide border border-slate-200">🙈 Ignorou</span>
                           )
                         )}
-                        {/* Mostra qual provedor está sendo/foi usado */}
                         {item.provedor && (
                           <span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold tracking-wide border border-blue-200">
                             {item.provedor}
@@ -562,7 +647,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* --- 3. ABA CAMPANHAS EM MASSA --- */}
         {abaAtiva === 'campanhas' && (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -588,7 +672,6 @@ export default function AdminPage() {
                <h3 className="font-bold text-xl text-slate-900 mb-6">Configurar Lote</h3>
                <form onSubmit={dispararCampanhaMassa} className="space-y-4">
                  
-                 {/* SELETOR DE SERVIDOR SMTP */}
                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg mb-4">
                     <label className="block text-xs uppercase tracking-wide font-bold text-slate-700 mb-3">Motor de Envio</label>
                     <div className="flex flex-col gap-3">
