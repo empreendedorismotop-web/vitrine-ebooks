@@ -11,7 +11,7 @@ type Perfil = {
   id: string
   nome: string
   email: string
-  telefone?: string // Mantido para o WhatsApp
+  telefone?: string 
   link_site: string 
   titulo_ebook: string
   descricao?: string 
@@ -105,7 +105,6 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
-  // --- FUNÇÃO PARA FORMATAR O LINK DO WHATSAPP ---
   const formatarLinkWhatsApp = (numero?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
@@ -190,7 +189,7 @@ export default function AdminPage() {
     }).eq('id', perfilEditando.id);
 
     if (error) {
-      mostrarNotificacao('Erro ao salvar as edições do anúncio.', 'erro');
+      mostrarNotificacao('Erro ao salvar.', 'erro');
     } else {
       mostrarNotificacao('Anúncio atualizado com sucesso!', 'sucesso');
       setPerfilEditando(null); 
@@ -207,7 +206,7 @@ export default function AdminPage() {
   const mudarPosicaoFixa = async (id: string, posicao: string) => {
     const valorParaSalvar = posicao === 'nenhuma' ? null : Number(posicao);
     const { error } = await supabase.from('profiles').update({ posicao_fixa: valorParaSalvar }).eq('id', id)
-    if (error) mostrarNotificacao('Erro ao alterar posição VIP.', 'erro')
+    if (error) mostrarNotificacao('Erro ao alterar VIP.', 'erro')
     else { mostrarNotificacao('Posição VIP atualizada!', 'sucesso'); carregarPerfis() }
   }
 
@@ -488,17 +487,10 @@ export default function AdminPage() {
                     <div>
                       <h3 className="font-bold text-slate-900">{perfil.nome}</h3>
                       
-                      {/* --- EMAIL E BOTÃO DO WHATSAPP AQUI --- */}
                       <div className="flex items-center gap-2 mt-1">
                         <p className="text-sm text-slate-600">{perfil.email}</p>
-                        
                         {perfil.telefone && (
-                          <a 
-                            href={formatarLinkWhatsApp(perfil.telefone)} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1"
-                          >
+                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
                             💬 Whats
                           </a>
                         )}
@@ -506,7 +498,19 @@ export default function AdminPage() {
                         <p className="text-sm text-slate-600">Site: {perfil.link_site || 'Não informado'}</p>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                      {/* --- O VISUAL DOS CLIQUES VOLTOU AQUI --- */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
+                          🖱️ {perfil.cliques?.length || 0} Cliques
+                        </span>
+                        {perfil.cliques && perfil.cliques.length > 0 && (
+                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 max-w-[200px] truncate">
+                            Última origem: <strong>{perfil.cliques[0].origem}</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-4">
                         <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
                           <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
                           <input type="text" list="sugestoes-planos" value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28" />
@@ -531,11 +535,7 @@ export default function AdminPage() {
                     </div>
                     
                     <div className="flex flex-wrap gap-2 shrink-0">
-                      
-                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200">
-                        ✏️ Editar
-                      </button>
-
+                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200">✏️ Editar</button>
                       {abaAtiva === 'pendente' && (
                         <>
                            <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200">📩 Lembrete</button>
@@ -629,27 +629,17 @@ export default function AdminPage() {
                  {perfis.map((p) => (
                    <label key={p.id} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 ${selecionados.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
                      <input type="checkbox" checked={selecionados.includes(p.id)} onChange={() => toggleSelecao(p.id)} className="size-5 text-blue-600 rounded" />
-                     
                      <div className="flex-1">
                        <p className="font-bold text-slate-900 flex items-center gap-2">
                          {p.nome} 
                          <span className="font-normal text-sm text-slate-500">({p.email})</span>
-                         
-                         {/* --- BOTÃO WHATSAPP NA LISTA DE CAMPANHAS --- */}
                          {p.telefone && (
-                           <a 
-                             href={formatarLinkWhatsApp(p.telefone)} 
-                             target="_blank" 
-                             rel="noopener noreferrer" 
-                             onClick={(e) => e.stopPropagation()} 
-                             className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors"
-                           >
+                           <a href={formatarLinkWhatsApp(p.telefone)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors">
                              💬 Whats
                            </a>
                          )}
                        </p>
                      </div>
-
                    </label>
                  ))}
                </div>
