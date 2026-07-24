@@ -35,6 +35,7 @@ type FilaItem = {
   agendado_para: string
   status: string
   clicou?: boolean
+  provedor?: string // Adicionado para suportar múltiplos SMTPs
 }
 
 export default function AdminPage() {
@@ -44,10 +45,13 @@ export default function AdminPage() {
   const [abaFila, setAbaFila] = useState('pendente') 
   const [notificacao, setNotificacao] = useState({ mostrar: false, msg: '', tipo: '' })
   const [selecionados, setSelecionados] = useState<string[]>([])
+  
+  // Estados do formulário de campanha
   const [assuntoCampanha, setAssuntoCampanha] = useState('')
   const [textoCampanha, setTextoCampanha] = useState('')
   const [textoBotao, setTextoBotao] = useState('')
   const [urlBotao, setUrlBotao] = useState('')
+  const [provedor, setProvedor] = useState('gmail') // Estado do seletor de SMTP
   const [qtdEnvioDesejada, setQtdEnvioDesejada] = useState(50)
   const [tamanhoLote, setTamanhoLote] = useState(2) 
   const [intervaloLote, setIntervaloLote] = useState(1) 
@@ -78,6 +82,49 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
+  // --- FUNÇÕES DE EXPORTAÇÃO E LIMPEZA (NOVAS) ---
+  const baixarCSV = () => {
+    const cabecalho = ['Nome', 'Email', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
+    const linhas = perfis.map(p => [
+        `"${p.nome || ''}"`,
+        `"${p.email || ''}"`,
+        `"${p.status || ''}"`,
+        `"${p.plano_selecionado || ''}"`,
+        `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`,
+        `"${p.cliques?.length || 0}"`,
+        `"${p.posicao_fixa || 'Nenhuma'}"`,
+        `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`
+    ])
+    const conteudo = [cabecalho, ...linhas].map(e => e.join(',')).join('\n')
+    const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute('download', 'contatos_vitrine.csv')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const limparFrios = async () => {
+    if (confirm('ATENÇÃO: Deseja excluir DEFINITIVAMENTE todos os clientes Inativos que NUNCA clicaram em nenhum e-mail? Isso manterá sua lista saudável.')) {
+      const inativosFrios = perfis.filter(p => p.status === 'inativo' && (!p.cliques || p.cliques.length === 0))
+      
+      if (inativosFrios.length === 0) {
+        return mostrarNotificacao('Sua lista já está saudável! Nenhum inativo sem cliques.', 'sucesso')
+      }
+
+      const idsParaExcluir = inativosFrios.map(p => p.id)
+      const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
+      
+      if (error) {
+        mostrarNotificacao('Erro ao limpar contatos.', 'erro')
+      } else {
+        mostrarNotificacao(`${idsParaExcluir.length} contatos frios excluídos com sucesso!`, 'sucesso')
+        carregarPerfis()
+      }
+    }
+  }
+
   // --- FUNÇÕES DE GERENCIAMENTO DE CLIENTES ---
   const mudarStatus = async (id: string, novoStatus: string) => {
     await supabase.from('profiles').update({ status: novoStatus }).eq('id', id)
@@ -97,7 +144,6 @@ export default function AdminPage() {
     }
   }
 
-  // NOVA FUNÇÃO: Alterar o texto do plano (livre ou pelas sugestões)
   const mudarPlano = async (id: string, novoPlano: string) => {
     const { error } = await supabase.from('profiles').update({ plano_selecionado: novoPlano }).eq('id', id)
     if (error) {
@@ -108,7 +154,6 @@ export default function AdminPage() {
     }
   }
 
-  // NOVA FUNÇÃO: Definir a data exata de vencimento
   const mudarDataExpiracao = async (id: string, novaData: string) => {
     const { error } = await supabase.from('profiles').update({ data_expiracao: novaData || null }).eq('id', id)
     if (error) {
@@ -152,6 +197,7 @@ export default function AdminPage() {
         base_url: window.location.origin,
         status: 'pendente',
         clicou: false,
+        provedor: 'gmail',
         agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
@@ -174,6 +220,7 @@ export default function AdminPage() {
         base_url: window.location.origin,
         status: 'pendente',
         clicou: false,
+        provedor: 'gmail',
         agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
@@ -237,6 +284,7 @@ export default function AdminPage() {
             base_url: item.base_url || window.location.origin,
             status: 'pendente',
             clicou: false,
+            provedor: provedor, // Reutiliza a escolha atual
             agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -274,11 +322,12 @@ export default function AdminPage() {
             nome: cliente.nome,
             assunto: assuntoCampanha,
             mensagem: textoCampanha,
-            texto_botao: textoBotao,           
+            texto_botao: textoBotao,          
             url_botao: urlBotao,               
             base_url: window.location.origin,  
             status: 'pendente',
             clicou: false, 
+            provedor: provedor, // Envia o provedor escolhido para a Fila
             agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -286,7 +335,7 @@ export default function AdminPage() {
       }
 
       await supabase.from('fila_envios').insert(registrosFila)
-      mostrarNotificacao(`Sucesso! ${listaFinalIds.length} e-mails agendados.`, 'sucesso')
+      mostrarNotificacao(`Sucesso! ${listaFinalIds.length} e-mails agendados via ${provedor.toUpperCase()}.`, 'sucesso')
       setSelecionados([]); setAssuntoCampanha(''); setTextoCampanha(''); setTextoBotao(''); setUrlBotao('')
       carregarFila() 
     } catch (error) {
@@ -319,10 +368,20 @@ export default function AdminPage() {
         </div>
 
         {/* --- MENU DE NAVEGAÇÃO SUPERIOR --- */}
-        <div className="flex flex-wrap gap-3 mb-8 border-b border-slate-200 pb-4">
+        <div className="flex flex-wrap items-center gap-3 mb-8 border-b border-slate-200 pb-4">
           <button onClick={() => setAbaAtiva('pendente')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'pendente' ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-600 border'}`}>Pendentes</button>
           <button onClick={() => setAbaAtiva('ativo')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'ativo' ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-slate-600 border'}`}>Ativos</button>
           <button onClick={() => setAbaAtiva('inativo')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'inativo' ? 'bg-red-100 text-red-800' : 'bg-white text-slate-600 border'}`}>Inativos</button>
+          
+          {/* NOVOS BOTÕES GLOBAIS */}
+          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
+             <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm transition-all">
+               📊 Baixar CSV
+             </button>
+             <button onClick={limparFrios} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm transition-all">
+               🧹 Limpar Frios
+             </button>
+          </div>
           
           <button onClick={() => setAbaAtiva('fila')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ml-auto ${abaAtiva === 'fila' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700 border border-indigo-200'}`}>
             ⏳ Fila ({fila.filter(f => f.status === 'pendente').length})
@@ -348,7 +407,6 @@ export default function AdminPage() {
                       {/* --- CONTROLES DE PLANO E VIP DO ADMIN --- */}
                       <div className="flex flex-wrap items-center gap-2 mt-3">
                         
-                        {/* HÍBRIDO: DIGITAÇÃO LIVRE E SUGESTÕES DE PLANO */}
                         <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
                           <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
                           <input
@@ -368,7 +426,6 @@ export default function AdminPage() {
                           </datalist>
                         </div>
 
-                        {/* CALENDÁRIO: DATA EXATA DE VENCIMENTO */}
                         <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100">
                           <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
                           <input 
@@ -379,7 +436,6 @@ export default function AdminPage() {
                           />
                         </div>
                         
-                        {/* POSIÇÃO VIP */}
                         <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100">
                           <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
                           <select 
@@ -475,6 +531,12 @@ export default function AdminPage() {
                             <span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold tracking-wide border border-slate-200">🙈 Ignorou</span>
                           )
                         )}
+                        {/* Mostra qual provedor está sendo/foi usado */}
+                        {item.provedor && (
+                          <span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold tracking-wide border border-blue-200">
+                            {item.provedor}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-slate-600 mt-1">Assunto: <span className="italic">{item.assunto}</span></p>
                     </div>
@@ -525,6 +587,22 @@ export default function AdminPage() {
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
                <h3 className="font-bold text-xl text-slate-900 mb-6">Configurar Lote</h3>
                <form onSubmit={dispararCampanhaMassa} className="space-y-4">
+                 
+                 {/* SELETOR DE SERVIDOR SMTP */}
+                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg mb-4">
+                    <label className="block text-xs uppercase tracking-wide font-bold text-slate-700 mb-3">Motor de Envio</label>
+                    <div className="flex flex-col gap-3">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="radio" name="provedor" value="gmail" checked={provedor === 'gmail'} onChange={(e) => setProvedor(e.target.value)} className="size-4 text-indigo-600" />
+                        <span className="text-sm font-bold text-slate-800">🟢 Usar Gmail (Padrão)</span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="radio" name="provedor" value="externo" checked={provedor === 'externo'} onChange={(e) => setProvedor(e.target.value)} className="size-4 text-indigo-600" />
+                        <span className="text-sm font-bold text-slate-800">🟣 Usar SMTP Externo (Lotes)</span>
+                      </label>
+                    </div>
+                 </div>
+
                  <div className="grid grid-cols-2 gap-3 mb-4">
                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
                      <label className="block text-xs font-bold text-slate-700 mb-1">Max. Seleção</label>
@@ -541,7 +619,7 @@ export default function AdminPage() {
                    <div><label className="block text-xs font-bold mb-1">Texto do Botão</label><input type="text" required value={textoBotao} onChange={e => setTextoBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
                    <div><label className="block text-xs font-bold mb-1">Link de Destino</label><input type="url" required value={urlBotao} onChange={e => setUrlBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
                  </div>
-                 <button type="submit" disabled={enviandoMassa || selecionados.length === 0} className="w-full mt-4 bg-blue-600 text-white font-bold p-4 rounded-lg hover:bg-blue-700 transition-all">
+                 <button type="submit" disabled={enviandoMassa || selecionados.length === 0} className="w-full mt-4 bg-blue-600 text-white font-bold p-4 rounded-lg hover:bg-blue-700 transition-all shadow-md">
                    {enviandoMassa ? 'Aguarde...' : `Enviar Lotes`}
                  </button>
                </form>

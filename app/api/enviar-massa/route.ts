@@ -4,26 +4,41 @@ import { supabase } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   try {
-    // Removemos o baseUrlOrigem, pois ele estava puxando a rota /admin e quebrando o link
-    const { assunto, mensagem, clientes, textoBotao, urlBotao } = await request.json()
+    // Adicionamos o "provedor" para saber qual servidor usar
+    const { assunto, mensagem, clientes, textoBotao, urlBotao, provedor } = await request.json()
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_EMAIL,
-        pass: process.env.GMAIL_SENHA
+    let configTransportador;
+
+    // Lógica inteligente de escolha do motor de envio
+    if (provedor === 'externo') {
+      configTransportador = {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT) || 465,
+        secure: Number(process.env.SMTP_PORT) === 465, // true para 465, false para portas como 587
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        }
       }
-    })
+    } else {
+      // Padrão de segurança: Continua usando o Gmail
+      configTransportador = {
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_EMAIL,
+          pass: process.env.GMAIL_SENHA
+        }
+      }
+    }
 
-    // Forçamos o uso da URL limpa que configuramos na Vercel (ou o fallback padrão).
-    // O .replace garante que não tenha uma barra sobrando no final.
+    const transporter = nodemailer.createTransport(configTransportador)
+
     const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://vitrine-ebooks.vercel.app').replace(/\/$/, '')
 
     for (const cliente of clientes) {
       const linkDestino = urlBotao || 'https://wa.me/5561982096982'
       const textoBotaoSeguro = textoBotao || 'Acessar Minha Oferta'
       
-      // O link mágico agora será montado perfeitamente na raiz do site
       const linkRastreado = `${baseUrl}/api/track?id=${cliente.id}&url=${encodeURIComponent(linkDestino)}&campanha=${encodeURIComponent(assunto)}`
 
       const htmlMensagem = `
@@ -45,8 +60,11 @@ export async function POST(request: Request) {
         </div>
       `
 
+      // Define quem é o remetente com base no provedor escolhido
+      const emailRemetente = provedor === 'externo' ? process.env.SMTP_USER : process.env.GMAIL_EMAIL;
+
       await transporter.sendMail({
-        from: `"Equipe Vitrine" <${process.env.GMAIL_EMAIL}>`,
+        from: `"Equipe Vitrine" <${emailRemetente}>`,
         to: cliente.email,
         subject: assunto,
         html: htmlMensagem
