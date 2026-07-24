@@ -4,8 +4,8 @@ import { supabase } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   try {
-    // Agora recebemos a baseUrlOrigem enviada pelo navegador!
-    const { assunto, mensagem, clientes, textoBotao, urlBotao, baseUrlOrigem } = await request.json()
+    // Removemos o baseUrlOrigem, pois ele estava puxando a rota /admin e quebrando o link
+    const { assunto, mensagem, clientes, textoBotao, urlBotao } = await request.json()
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -15,14 +15,15 @@ export async function POST(request: Request) {
       }
     })
 
-    // Se o navegador enviou a URL real, usamos ela. Se não, tenta o ambiente.
-    const baseUrl = baseUrlOrigem || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    // Forçamos o uso da URL limpa que configuramos na Vercel (ou o fallback padrão).
+    // O .replace garante que não tenha uma barra sobrando no final.
+    const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://vitrine-ebooks.vercel.app').replace(/\/$/, '')
 
     for (const cliente of clientes) {
       const linkDestino = urlBotao || 'https://wa.me/5561982096982'
       const textoBotaoSeguro = textoBotao || 'Acessar Minha Oferta'
       
-      // O link mágico agora será montado com perfeição
+      // O link mágico agora será montado perfeitamente na raiz do site
       const linkRastreado = `${baseUrl}/api/track?id=${cliente.id}&url=${encodeURIComponent(linkDestino)}&campanha=${encodeURIComponent(assunto)}`
 
       const htmlMensagem = `
