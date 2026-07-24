@@ -56,9 +56,11 @@ export default function AdminPage() {
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
-  // --- ESTADOS DO MODAL DE LIMPEZA ---
+  // --- ESTADOS DOS MODAIS ---
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
-  const [diasInatividade, setDiasInatividade] = useState(90) // Padrão recomendado: 90 dias
+  const [diasInatividade, setDiasInatividade] = useState(90)
+  
+  const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null) // Controla a janela de edição
 
   useEffect(() => {
     carregarPerfis()
@@ -107,38 +109,49 @@ export default function AdminPage() {
     document.body.removeChild(link)
   }
 
-  // A LÓGICA DE SEGURANÇA: Data limite e filtro estrito
   const dataLimite = new Date()
   dataLimite.setDate(dataLimite.getDate() - diasInatividade)
 
   const contatosFrios = perfis.filter(p => {
-    // TRAVA DE SEGURANÇA 1: Se estiver Ativo ou Pendente, o sistema ignora (protegido).
     if (p.status !== 'inativo') return false
-    
-    // TRAVA DE SEGURANÇA 2: Se já clicou em algum e-mail, está a salvo.
     const clicouAlgumaVez = p.cliques && p.cliques.length > 0
     if (clicouAlgumaVez) return false
-
-    // TRAVA DE SEGURANÇA 3: Só pega quem foi cadastrado ANTES da data limite (ex: 90 dias atrás).
     const dataCadastro = p.created_at ? new Date(p.created_at) : new Date()
     return dataCadastro < dataLimite
   })
 
   const executarLimpezaFrios = async () => {
     const idsParaExcluir = contatosFrios.map(p => p.id)
-    
     if (idsParaExcluir.length === 0) {
       setModalLimpezaAberto(false)
       return mostrarNotificacao('Nenhum contato inativo antigo encontrado.', 'sucesso')
     }
-
     const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
-    
     if (error) {
       mostrarNotificacao('Erro ao limpar contatos.', 'erro')
     } else {
       mostrarNotificacao(`${idsParaExcluir.length} contatos frios excluídos com sucesso!`, 'sucesso')
       setModalLimpezaAberto(false)
+      carregarPerfis()
+    }
+  }
+
+  // --- NOVA FUNÇÃO DE SALVAR EDIÇÃO DO ADMIN ---
+  const salvarEdicaoPerfil = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!perfilEditando) return
+
+    const { error } = await supabase.from('profiles').update({
+      nome: perfilEditando.nome,
+      titulo_ebook: perfilEditando.titulo_ebook,
+      link_site: perfilEditando.link_site
+    }).eq('id', perfilEditando.id)
+
+    if (error) {
+      mostrarNotificacao('Erro ao atualizar os dados do cliente.', 'erro')
+    } else {
+      mostrarNotificacao('Anúncio do cliente atualizado com sucesso!', 'sucesso')
+      setPerfilEditando(null)
       carregarPerfis()
     }
   }
@@ -152,7 +165,6 @@ export default function AdminPage() {
   const mudarPosicaoFixa = async (id: string, posicao: string) => {
     const valorParaSalvar = posicao === 'nenhuma' ? null : Number(posicao);
     const { error } = await supabase.from('profiles').update({ posicao_fixa: valorParaSalvar }).eq('id', id)
-    
     if (error) {
       mostrarNotificacao('Erro ao alterar posição VIP.', 'erro')
     } else {
@@ -191,7 +203,6 @@ export default function AdminPage() {
 
   const dispararLembretePendente = async (perfil: Perfil) => {
     if (confirm(`Deseja enviar um lembrete de ativação de plano para ${perfil.nome}?`)) {
-      
       fetch('/api/enviar-lembrete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +229,6 @@ export default function AdminPage() {
         agendado_para: new Date().toISOString()
       }
       await supabase.from('fila_envios').insert([novoEnvio])
-      
       mostrarNotificacao('Lembrete enviado e rastreio adicionado à Fila!', 'sucesso')
       carregarFila()
     }
@@ -272,14 +282,10 @@ export default function AdminPage() {
 
   const reenviarParaNaoClicadores = async () => {
     const naoClicaram = fila.filter(item => item.status === 'enviado' && !item.clicou)
-    
-    if (naoClicaram.length === 0) {
-      return mostrarNotificacao('Todos os clientes desta lista já clicaram!', 'sucesso')
-    }
+    if (naoClicaram.length === 0) return mostrarNotificacao('Todos os clientes desta lista já clicaram!', 'sucesso')
 
     if (confirm(`Agendar o reenvio para os ${naoClicaram.length} clientes que ignoraram o e-mail?\nO sistema fará envios graduais (2 por minuto).`)) {
       setEnviandoMassa(true)
-      
       const registrosFila = []
       let tempoAgendado = new Date() 
       const limitePorLote = 2        
@@ -287,7 +293,6 @@ export default function AdminPage() {
 
       for (let i = 0; i < naoClicaram.length; i += limitePorLote) {
         const lote = naoClicaram.slice(i, i + limitePorLote)
-
         for (const item of lote) {
           registrosFila.push({
             perfil_id: item.perfil_id,
@@ -369,19 +374,66 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
+      {/* --- OVERLAY DO MODAL DE EDIÇÃO DO CLIENTE --- */}
+      {perfilEditando && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-100 bg-indigo-50">
+              <h2 className="text-xl font-bold text-indigo-900">Editar Anúncio do Cliente</h2>
+              <p className="text-indigo-700 text-sm mt-1">{perfilEditando.email}</p>
+            </div>
+            
+            <form onSubmit={salvarEdicaoPerfil} className="p-6 flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Nome do Cliente</label>
+                <input 
+                  type="text" 
+                  required
+                  value={perfilEditando.nome} 
+                  onChange={(e) => setPerfilEditando({...perfilEditando, nome: e.target.value})}
+                  className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Título do Anúncio (E-book)</label>
+                <input 
+                  type="text" 
+                  value={perfilEditando.titulo_ebook || ''} 
+                  onChange={(e) => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})}
+                  className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-indigo-500"
+                  placeholder="Ex: O Segredo das Vendas"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Link do Site/Checkout</label>
+                <input 
+                  type="url" 
+                  value={perfilEditando.link_site || ''} 
+                  onChange={(e) => setPerfilEditando({...perfilEditando, link_site: e.target.value})}
+                  className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-indigo-500"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100">
+                <button type="button" onClick={() => setPerfilEditando(null)} className="px-5 py-2.5 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
+                <button type="submit" className="px-5 py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition-colors">Salvar Alterações</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* --- OVERLAY DO MODAL DE LIMPEZA DE LISTA --- */}
       {modalLimpezaAberto && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
-            
             <div className="p-6 border-b border-slate-100 bg-slate-50">
               <h2 className="text-2xl font-bold text-slate-900">Limpeza de Contatos Frios</h2>
               <p className="text-slate-500 text-sm mt-1">Exclua leads que esfriaram para proteger o domínio e as suas campanhas.</p>
             </div>
 
             <div className="p-6 flex-1 overflow-y-auto">
-              
-              {/* ALERTA DE SEGURANÇA VISUAL NOVO */}
               <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
                 <span className="text-xl">🛡️</span>
                 <div>
@@ -425,21 +477,9 @@ export default function AdminPage() {
             </div>
 
             <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button 
-                onClick={() => setModalLimpezaAberto(false)} 
-                className="px-6 py-2.5 rounded-lg font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={executarLimpezaFrios}
-                disabled={contatosFrios.length === 0}
-                className={`px-6 py-2.5 rounded-lg font-bold text-white transition-colors ${contatosFrios.length === 0 ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 shadow-md'}`}
-              >
-                Confirmar e Excluir
-              </button>
+              <button onClick={() => setModalLimpezaAberto(false)} className="px-6 py-2.5 rounded-lg font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors">Cancelar</button>
+              <button onClick={executarLimpezaFrios} disabled={contatosFrios.length === 0} className={`px-6 py-2.5 rounded-lg font-bold text-white transition-colors ${contatosFrios.length === 0 ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 shadow-md'}`}>Confirmar e Excluir</button>
             </div>
-            
           </div>
         </div>
       )}
@@ -464,12 +504,8 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('inativo')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'inativo' ? 'bg-red-100 text-red-800' : 'bg-white text-slate-600 border'}`}>Inativos</button>
           
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
-             <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm transition-all">
-               📊 Baixar CSV
-             </button>
-             <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm transition-all">
-               🧹 Limpar Frios
-             </button>
+             <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm transition-all">📊 Baixar CSV</button>
+             <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm transition-all">🧹 Limpar Frios</button>
           </div>
           
           <button onClick={() => setAbaAtiva('fila')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ml-auto ${abaAtiva === 'fila' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700 border border-indigo-200'}`}>
@@ -493,52 +529,34 @@ export default function AdminPage() {
                       <p className="text-sm text-slate-600">{perfil.email} | Site: {perfil.link_site || 'Não informado'}</p>
                       
                       <div className="flex flex-wrap items-center gap-2 mt-3">
-                        
                         <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
                           <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
-                          <input
-                            type="text"
-                            list="sugestoes-planos"
-                            value={perfil.plano_selecionado || ''}
-                            onChange={(e) => mudarPlano(perfil.id, e.target.value)}
-                            placeholder="Ex: 5 meses"
-                            className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28 cursor-text hover:border-indigo-400"
-                          />
+                          <input type="text" list="sugestoes-planos" value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28 cursor-text hover:border-indigo-400" />
                           <datalist id="sugestoes-planos">
-                            <option value="1_mes">1 Mês</option>
-                            <option value="3_meses">3 Meses</option>
-                            <option value="6_meses">6 Meses</option>
-                            <option value="12_meses">12 Meses</option>
-                            <option value="vitalicio">Vitalício</option>
+                            <option value="1_mes">1 Mês</option><option value="3_meses">3 Meses</option><option value="6_meses">6 Meses</option><option value="12_meses">12 Meses</option><option value="vitalicio">Vitalício</option>
                           </datalist>
                         </div>
 
                         <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100">
                           <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
-                          <input 
-                            type="date"
-                            value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''}
-                            onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)}
-                            className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none cursor-pointer hover:border-rose-400"
-                          />
+                          <input type="date" value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''} onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none cursor-pointer hover:border-rose-400" />
                         </div>
                         
                         <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100">
                           <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
-                          <select 
-                            value={perfil.posicao_fixa || 'nenhuma'}
-                            onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)}
-                            className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none cursor-pointer hover:border-amber-400"
-                          >
+                          <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none cursor-pointer hover:border-amber-400">
                             <option value="nenhuma">Padrão</option>
-                            {[...Array(12)].map((_, i) => (
-                              <option key={i+1} value={i+1}>Top {i+1}</option>
-                            ))}
+                            {[...Array(12)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
                           </select>
                         </div>
-
+                        
+                        {/* --- NOVO BOTÃO DE EDIÇÃO --- */}
+                        <button onClick={() => setPerfilEditando(perfil)} className="ml-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 font-bold rounded-md text-xs hover:bg-indigo-200 border border-indigo-200 transition-colors">
+                          ✏️ Editar
+                        </button>
                       </div>
                     </div>
+                    
                     <div className="flex gap-2 shrink-0">
                       {abaAtiva === 'pendente' && (
                         <>
@@ -579,23 +597,15 @@ export default function AdminPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {abaFila === 'pendente' && filaFiltrada.length > 0 && (
-                  <button onClick={esvaziarFila} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">🛑 Cancelar Pendentes</button>
-                )}
-                
+                {abaFila === 'pendente' && filaFiltrada.length > 0 && (<button onClick={esvaziarFila} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">🛑 Cancelar Pendentes</button>)}
                 {abaFila === 'enviado' && filaFiltrada.length > 0 && (
                   <>
-                    <button onClick={reenviarParaNaoClicadores} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 shadow-sm transition-all">
-                      🔄 Reenviar (Não Clicou)
-                    </button>
-                    <button onClick={limparHistoricoEnviados} className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-100 transition-all">
-                      🧹 Limpar Tudo
-                    </button>
+                    <button onClick={reenviarParaNaoClicadores} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 shadow-sm transition-all">🔄 Reenviar (Não Clicou)</button>
+                    <button onClick={limparHistoricoEnviados} className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-100 transition-all">🧹 Limpar Tudo</button>
                   </>
                 )}
               </div>
             </div>
-
             {filaFiltrada.length === 0 ? (
               <div className="p-12 text-center">
                 <span className="text-4xl mb-4 block">{abaFila === 'pendente' ? '⏳' : abaFila === 'enviado' ? '✅' : '🛡️'}</span>
@@ -605,40 +615,20 @@ export default function AdminPage() {
               <div className="divide-y divide-slate-100">
                 {filaFiltrada.map(item => (
                   <div key={item.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
-                    
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
                         <p className="font-bold text-slate-900">{item.nome} <span className="text-sm font-normal text-slate-500">({item.email})</span></p>
-                        
-                        {abaFila === 'enviado' && (
-                          item.clicou ? (
-                            <span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold tracking-wide border border-emerald-200">🎯 Clicou</span>
-                          ) : (
-                            <span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold tracking-wide border border-slate-200">🙈 Ignorou</span>
-                          )
-                        )}
-                        {item.provedor && (
-                          <span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold tracking-wide border border-blue-200">
-                            {item.provedor}
-                          </span>
-                        )}
+                        {abaFila === 'enviado' && (item.clicou ? (<span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold tracking-wide border border-emerald-200">🎯 Clicou</span>) : (<span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold tracking-wide border border-slate-200">🙈 Ignorou</span>))}
+                        {item.provedor && (<span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold tracking-wide border border-blue-200">{item.provedor}</span>)}
                       </div>
                       <p className="text-sm text-slate-600 mt-1">Assunto: <span className="italic">{item.assunto}</span></p>
                     </div>
-                    
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">
-                            {abaFila === 'pendente' ? 'Agendado' : abaFila === 'enviado' ? 'Disparado' : 'Falha'}
-                        </p>
-                        <p className={`text-sm font-bold px-3 py-1 rounded-md mt-1 ${abaFila === 'pendente' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}>
-                          {new Date(item.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">{abaFila === 'pendente' ? 'Agendado' : abaFila === 'enviado' ? 'Disparado' : 'Falha'}</p>
+                        <p className={`text-sm font-bold px-3 py-1 rounded-md mt-1 ${abaFila === 'pendente' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}>{new Date(item.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
-                      
-                      <button onClick={() => removerDaFila(item.id)} className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-colors">
-                        🗑️ {abaFila === 'pendente' ? 'Cancelar' : 'Excluir'}
-                      </button>
+                      <button onClick={() => removerDaFila(item.id)} className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-colors">🗑️ {abaFila === 'pendente' ? 'Cancelar' : 'Excluir'}</button>
                     </div>
                   </div>
                 ))}
@@ -659,14 +649,19 @@ export default function AdminPage() {
                  <button onClick={selecionarTodos} type="button" className="px-3 py-1.5 text-xs font-bold bg-slate-800 text-white hover:bg-slate-700 rounded-md">Selecionar Todos</button>
                  <button onClick={() => setSelecionados([])} type="button" className="px-3 py-1.5 text-xs font-bold bg-red-50 text-red-600 hover:bg-red-100 rounded-md ml-auto">Limpar</button>
                </div>
+               
+               {/* --- EMAILS AGORA APARECEM NA ABA DE DISPAROS --- */}
                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
                  {perfis.map((p) => (
                    <label key={p.id} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 ${selecionados.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
                      <input type="checkbox" checked={selecionados.includes(p.id)} onChange={() => toggleSelecao(p.id)} className="size-5 text-blue-600 rounded" />
-                     <div className="flex-1"><p className="font-bold text-slate-900">{p.nome}</p></div>
+                     <div className="flex-1">
+                       <p className="font-bold text-slate-900">{p.nome} <span className="font-normal text-slate-500 text-sm">({p.email})</span></p>
+                     </div>
                    </label>
                  ))}
                </div>
+               
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
                <h3 className="font-bold text-xl text-slate-900 mb-6">Configurar Lote</h3>
