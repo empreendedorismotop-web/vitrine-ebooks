@@ -20,7 +20,7 @@ type Perfil = {
   data_expiracao?: string
   created_at?: string
   ultimo_email_enviado?: string
-  ultimo_whats_enviado?: string // NOVO CAMPO DE HISTÓRICO WHATSAPP
+  ultimo_whats_enviado?: string 
   imagem_url?: string
   cliques?: Clique[]
   posicao_fixa?: number | null 
@@ -69,9 +69,6 @@ export default function AdminPage() {
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
-  // ==========================================
-  // NOVO: ABA DE DISPAROS WHATSAPP E SEUS ESTADOS
-  // ==========================================
   const [filtroWhats, setFiltroWhats] = useState<'todos' | 'nao_enviados' | 'enviados'>('todos')
   const [textoWhatsCampanha, setTextoWhatsCampanha] = useState('Olá! Acabamos de liberar uma novidade na Vitrine.')
 
@@ -125,8 +122,6 @@ export default function AdminPage() {
   }
 
   const carregarPerfis = async () => {
-    // ⚠️ ATENÇÃO: Para o "ultimo_whats_enviado" funcionar sem dar erro, certifique-se de CRIAR ESSA COLUNA
-    // na tabela 'profiles' do seu Supabase com o tipo 'text' (ou timestamp). Senão a tabela não carrega.
     const { data } = await supabase.from('profiles').select('*, cliques(origem)').order('created_at', { ascending: false })
     if (data) setPerfis(data)
   }
@@ -141,7 +136,6 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
-  // --- FORMATA LINK WHATSAPP (MENSAGEM PERSONALIZADA DE CAMPANHA) ---
   const formatarLinkWhatsAppCampanha = (numero?: string, mensagem?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
@@ -153,7 +147,10 @@ export default function AdminPage() {
     return base
   }
 
-  // Registra que um WhatsApp foi enviado para o cliente
+  const formatarLinkWhatsApp = (numero?: string) => {
+    return formatarLinkWhatsAppCampanha(numero)
+  }
+
   const marcarWhatsAppEnviado = async (id: string) => {
     const agora = new Date().toISOString()
     const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: agora }).eq('id', id)
@@ -385,7 +382,6 @@ export default function AdminPage() {
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const filaFiltrada = fila.filter(item => item.status === abaFila)
 
-  // LOGICA PARA ABA DE DISPAROS DE WHATSAPP (Filtra clientes com Telefone)
   const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '')
   
   const clientesWhatsAppFiltrados = clientesComWhatsapp.filter(p => {
