@@ -77,6 +77,11 @@ export default function AdminPage() {
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
   const [uploading, setUploading] = useState(false) 
 
+  // ESTADOS DO NOVO MODAL DE IMPORTAÇÃO
+  const [modalImportacaoAberto, setModalImportacaoAberto] = useState(false)
+  const [textoImportacao, setTextoImportacao] = useState('')
+  const [importando, setImportando] = useState(false)
+
   useEffect(() => {
     setIsClient(true)
 
@@ -136,6 +141,56 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
+  // ==========================================
+  // NOVA FUNÇÃO: IMPORTAÇÃO DE LEADS
+  // ==========================================
+  const processarImportacao = async () => {
+    if (!textoImportacao.trim()) {
+      return mostrarNotificacao('Cole a lista de e-mails ou números antes de importar.', 'erro')
+    }
+
+    setImportando(true)
+    
+    // Separa o texto por quebras de linha e limpa espaços vazios
+    const linhas = textoImportacao.split('\n').map(l => l.trim()).filter(l => l !== '')
+    
+    const novosLeads = []
+
+    for (const linha of linhas) {
+      const isEmail = linha.includes('@')
+      
+      // Cria um lead fictício para não aparecer na vitrine, mas ficar disponível para campanhas
+      novosLeads.push({
+        id: crypto.randomUUID(),
+        nome: 'Lead Importado',
+        email: isEmail ? linha : `sem-email-${crypto.randomUUID().substring(0,6)}@importado.com`, // Se for só telefone, cria um e-mail fake obrigatório pro banco
+        telefone: isEmail ? null : linha,
+        titulo_ebook: 'Material Indefinido',
+        link_site: 'https://vitrine-ebooks.vercel.app',
+        plano_selecionado: 'Importado',
+        status: 'inativo' // Nasce inativo para não ir pra vitrine
+      })
+    }
+
+    if (novosLeads.length === 0) {
+      setImportando(false)
+      return mostrarNotificacao('Nenhum dado válido encontrado na lista.', 'erro')
+    }
+
+    const { error } = await supabase.from('profiles').insert(novosLeads)
+
+    if (error) {
+      mostrarNotificacao('Erro ao importar contatos.', 'erro')
+      console.error(error)
+    } else {
+      mostrarNotificacao(`${novosLeads.length} contatos importados com sucesso!`, 'sucesso')
+      setModalImportacaoAberto(false)
+      setTextoImportacao('')
+      carregarPerfis()
+    }
+    setImportando(false)
+  }
+
   const formatarLinkWhatsAppCampanha = (numero?: string, mensagem?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
@@ -147,10 +202,6 @@ export default function AdminPage() {
     return base
   }
 
-  const formatarLinkWhatsApp = (numero?: string) => {
-    return formatarLinkWhatsAppCampanha(numero)
-  }
-
   const marcarWhatsAppEnviado = async (id: string) => {
     const agora = new Date().toISOString()
     const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: agora }).eq('id', id)
@@ -159,7 +210,6 @@ export default function AdminPage() {
     }
   }
 
-  // --- NOVA FUNÇÃO PARA ZERAR O HISTÓRICO DE WHATSAPP ---
   const resetarEnviosWhatsApp = async () => {
     if (confirm('Tem certeza que deseja zerar o histórico do WhatsApp? Todos os contatos voltarão para a lista "Falta Enviar" para uma nova campanha.')) {
       const idsParaLimpar = perfis.filter(p => p.ultimo_whats_enviado != null).map(p => p.id)
@@ -420,6 +470,44 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
+      {/* MODAL DE IMPORTAÇÃO DE LEADS */}
+      {modalImportacaoAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-slate-100 bg-emerald-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-emerald-900">📥 Importar Lista de Leads</h2>
+                <p className="text-emerald-700 text-xs mt-1">Cadastre e-mails ou números em massa.</p>
+              </div>
+              <button onClick={() => setModalImportacaoAberto(false)} className="text-emerald-400 hover:text-emerald-700 text-2xl font-bold">&times;</button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4">
+                Cole abaixo a sua lista. Coloque <strong>apenas 1 item por linha</strong>. <br/>
+                Eles serão salvos como "Inativos" (não aparecem na vitrine) para você enviar campanhas depois.
+              </p>
+              
+              <textarea 
+                rows={10} 
+                className="w-full p-4 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm font-mono"
+                placeholder="exemplo@gmail.com&#10;5511999999999&#10;outro@email.com&#10;..."
+                value={textoImportacao}
+                onChange={(e) => setTextoImportacao(e.target.value)}
+              />
+            </div>
+
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setModalImportacaoAberto(false)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
+              <button onClick={processarImportacao} disabled={importando || !textoImportacao.trim()} className="px-5 py-2 rounded-lg font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md disabled:opacity-50 flex items-center gap-2">
+                {importando ? '⏳ Importando...' : '📥 Iniciar Importação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO */}
       {perfilEditando && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -490,6 +578,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* MODAL DE LIMPEZA DE FRIOS */}
       {modalLimpezaAberto && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -561,6 +650,8 @@ export default function AdminPage() {
           
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
              <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm">📊 Baixar CSV</button>
+             {/* NOVO BOTÃO DE IMPORTAR AQUI */}
+             <button onClick={() => setModalImportacaoAberto(true)} className="px-4 py-2 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-lg text-sm hover:bg-emerald-100 shadow-sm">📥 Importar Leads</button>
              <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm">🧹 Limpar Frios</button>
           </div>
           
