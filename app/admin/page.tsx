@@ -20,6 +20,7 @@ type Perfil = {
   data_expiracao?: string
   created_at?: string
   ultimo_email_enviado?: string
+  ultimo_whats_enviado?: string // NOVO CAMPO DE HISTÓRICO WHATSAPP
   imagem_url?: string
   cliques?: Clique[]
   posicao_fixa?: number | null 
@@ -44,7 +45,7 @@ type FilaItem = {
 export default function AdminPage() {
   const router = useRouter()
   const [autorizado, setAutorizado] = useState(false) 
-  const [isClient, setIsClient] = useState(false) // Trava para garantir que estamos no navegador
+  const [isClient, setIsClient] = useState(false) 
 
   // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
@@ -52,7 +53,6 @@ export default function AdminPage() {
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [fila, setFila] = useState<FilaItem[]>([]) 
   
-  // Abas iniciam padrão para o SSR do Next.js
   const [abaAtiva, setAbaAtiva] = useState('pendente')
   const [abaFila, setAbaFila] = useState('pendente') 
   
@@ -69,19 +69,20 @@ export default function AdminPage() {
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
+  // ==========================================
+  // NOVO: ABA DE DISPAROS WHATSAPP E SEUS ESTADOS
+  // ==========================================
+  const [filtroWhats, setFiltroWhats] = useState<'todos' | 'nao_enviados' | 'enviados'>('todos')
+  const [textoWhatsCampanha, setTextoWhatsCampanha] = useState('Olá! Acabamos de liberar uma novidade na Vitrine.')
+
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
   const [diasInatividade, setDiasInatividade] = useState(90)
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
   const [uploading, setUploading] = useState(false) 
 
-  // ==========================================
-  // INTELIGÊNCIA: RECUPERAÇÃO DE ABAS SEGURA (Next.js)
-  // ==========================================
   useEffect(() => {
-    // 1. Marca que estamos rodando no cliente (navegador)
     setIsClient(true)
 
-    // 2. Resgata a memória do navegador de forma segura
     try {
       const abaSalva = localStorage.getItem('vitrine_aba_ativa')
       if (abaSalva) setAbaAtiva(abaSalva)
@@ -92,11 +93,9 @@ export default function AdminPage() {
       console.warn("localStorage indisponível")
     }
 
-    // 3. Continua com a segurança normal
     verificarSeguranca()
   }, [])
 
-  // Salva as abas ativas sempre que o usuário muda
   useEffect(() => {
     if (isClient) {
       localStorage.setItem('vitrine_aba_ativa', abaAtiva)
@@ -108,7 +107,6 @@ export default function AdminPage() {
       localStorage.setItem('vitrine_aba_fila', abaFila)
     }
   }, [abaFila, isClient])
-  // ==========================================
 
   const verificarSeguranca = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -127,6 +125,8 @@ export default function AdminPage() {
   }
 
   const carregarPerfis = async () => {
+    // ⚠️ ATENÇÃO: Para o "ultimo_whats_enviado" funcionar sem dar erro, certifique-se de CRIAR ESSA COLUNA
+    // na tabela 'profiles' do seu Supabase com o tipo 'text' (ou timestamp). Senão a tabela não carrega.
     const { data } = await supabase.from('profiles').select('*, cliques(origem)').order('created_at', { ascending: false })
     if (data) setPerfis(data)
   }
@@ -141,10 +141,25 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
-  const formatarLinkWhatsApp = (numero?: string) => {
+  // --- FORMATA LINK WHATSAPP (MENSAGEM PERSONALIZADA DE CAMPANHA) ---
+  const formatarLinkWhatsAppCampanha = (numero?: string, mensagem?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
-    return apenasNumeros.startsWith('55') ? `https://wa.me/${apenasNumeros}` : `https://wa.me/55${apenasNumeros}`
+    const base = apenasNumeros.startsWith('55') ? `https://wa.me/${apenasNumeros}` : `https://wa.me/55${apenasNumeros}`
+    
+    if (mensagem) {
+       return `${base}?text=${encodeURIComponent(mensagem)}`
+    }
+    return base
+  }
+
+  // Registra que um WhatsApp foi enviado para o cliente
+  const marcarWhatsAppEnviado = async (id: string) => {
+    const agora = new Date().toISOString()
+    const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: agora }).eq('id', id)
+    if (!error) {
+       carregarPerfis()
+    }
   }
 
   const baixarCSV = () => {
@@ -370,11 +385,20 @@ export default function AdminPage() {
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const filaFiltrada = fila.filter(item => item.status === abaFila)
 
+  // LOGICA PARA ABA DE DISPAROS DE WHATSAPP (Filtra clientes com Telefone)
+  const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '')
+  
+  const clientesWhatsAppFiltrados = clientesComWhatsapp.filter(p => {
+    if (filtroWhats === 'todos') return true
+    if (filtroWhats === 'enviados') return p.ultimo_whats_enviado != null
+    if (filtroWhats === 'nao_enviados') return p.ultimo_whats_enviado == null
+    return true
+  })
+
   if (!autorizado) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">Verificando Credenciais...</div>
   }
 
-  // Previne renderização completa se ainda não verificou cliente para evitar flicker
   if (!isClient) return null; 
 
   return (
@@ -527,7 +551,8 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('fila')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ml-auto ${abaAtiva === 'fila' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700 border border-indigo-200'}`}>
             ⏳ Fila ({fila.filter(f => f.status === 'pendente').length})
           </button>
-          <button onClick={() => setAbaAtiva('campanhas')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'campanhas' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 border'}`}>📧 Disparos</button>
+          <button onClick={() => setAbaAtiva('campanhas')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'campanhas' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 border'}`}>📧 E-mail Massa</button>
+          <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
         </div>
 
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
@@ -544,7 +569,7 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2 mt-1">
                         <p className="text-sm text-slate-600">{perfil.email}</p>
                         {perfil.telefone && (
-                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
+                          <a href={formatarLinkWhatsAppCampanha(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
                             💬 Whats
                           </a>
                         )}
@@ -687,7 +712,7 @@ export default function AdminPage() {
                          {p.nome} 
                          <span className="font-normal text-sm text-slate-500">({p.email})</span>
                          {p.telefone && (
-                           <a href={formatarLinkWhatsApp(p.telefone)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors">
+                           <a href={formatarLinkWhatsAppCampanha(p.telefone)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors">
                              💬 Whats
                            </a>
                          )}
@@ -698,7 +723,7 @@ export default function AdminPage() {
                </div>
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
-               <h3 className="font-bold text-xl text-slate-900 mb-6">Configurar Lote</h3>
+               <h3 className="font-bold text-xl text-slate-900 mb-6">Configurar Lote de E-mails</h3>
                <form onSubmit={dispararCampanhaMassa} className="space-y-4">
                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg mb-4">
                     <label className="block text-xs uppercase tracking-wide font-bold text-slate-700 mb-3">Motor de Envio</label>
@@ -730,12 +755,89 @@ export default function AdminPage() {
                    <div><label className="block text-xs font-bold mb-1">Link de Destino *</label><input type="url" required value={urlBotao} onChange={e => setUrlBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
                  </div>
                  <button type="submit" disabled={enviandoMassa || selecionados.length === 0} className="w-full mt-4 bg-blue-600 text-white font-bold p-4 rounded-lg hover:bg-blue-700 shadow-md">
-                   {enviandoMassa ? 'Aguarde...' : `Enviar Lotes`}
+                   {enviandoMassa ? 'Aguarde...' : `Agendar Envios de E-mail`}
                  </button>
                </form>
             </div>
           </div>
         )}
+
+        {abaAtiva === 'whatsapp' && (
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+               <div className="p-4 bg-emerald-50 border-b border-emerald-200 flex justify-between items-center">
+                 <span className="font-bold text-emerald-900">Listagem de Contatos (Com WhatsApp)</span>
+                 <div className="flex gap-2">
+                   <button onClick={() => setFiltroWhats('todos')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'todos' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Todos ({clientesComWhatsapp.length})</button>
+                   <button onClick={() => setFiltroWhats('nao_enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'nao_enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Falta Enviar</button>
+                   <button onClick={() => setFiltroWhats('enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Já Enviados</button>
+                 </div>
+               </div>
+               
+               <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                 {clientesWhatsAppFiltrados.map((p) => (
+                   <div key={p.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                     <div className="flex-1">
+                       <p className="font-bold text-slate-900 flex items-center gap-2">
+                         {p.nome} 
+                         <span className="text-xs text-slate-500 font-normal">({p.telefone})</span>
+                       </p>
+                       <p className="text-xs text-slate-400 mt-1">
+                         {p.ultimo_whats_enviado 
+                           ? `Último envio: ${new Date(p.ultimo_whats_enviado).toLocaleDateString('pt-BR')} às ${new Date(p.ultimo_whats_enviado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` 
+                           : 'Nenhum envio registrado'}
+                       </p>
+                     </div>
+                     <div className="flex items-center gap-3">
+                       <a 
+                         href={formatarLinkWhatsAppCampanha(p.telefone, textoWhatsCampanha)} 
+                         target="_blank" 
+                         rel="noopener noreferrer" 
+                         onClick={() => marcarWhatsAppEnviado(p.id)}
+                         className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                       >
+                         💬 Abrir Conversa
+                       </a>
+                     </div>
+                   </div>
+                 ))}
+                 
+                 {clientesWhatsAppFiltrados.length === 0 && (
+                   <div className="p-8 text-center text-slate-500 font-bold">Nenhum cliente encontrado para este filtro.</div>
+                 )}
+               </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
+               <h3 className="font-bold text-xl text-slate-900 mb-2">Mensagem Padrão</h3>
+               <p className="text-sm text-slate-500 mb-6">Esta mensagem será preenchida automaticamente ao abrir o WhatsApp do cliente.</p>
+               
+               <div className="space-y-4">
+                 <div>
+                   <label className="block text-sm font-bold mb-1 text-slate-700">Texto da Mensagem</label>
+                   <textarea 
+                     value={textoWhatsCampanha} 
+                     onChange={e => setTextoWhatsCampanha(e.target.value)} 
+                     rows={8} 
+                     className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg outline-none focus:border-emerald-500 transition-colors" 
+                     placeholder="Digite a mensagem de oferta..." 
+                   />
+                 </div>
+                 
+                 <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                   <p className="text-xs text-emerald-800 font-bold mb-2">💡 Como funciona o fluxo manual:</p>
+                   <ul className="text-xs text-emerald-700 space-y-1 list-disc pl-4">
+                     <li>Edite a mensagem acima.</li>
+                     <li>Clique em "Abrir Conversa" na lista.</li>
+                     <li>O sistema registrará automaticamente a data e hora do envio no botão.</li>
+                     <li>Use o filtro "Falta Enviar" para continuar de onde parou.</li>
+                   </ul>
+                 </div>
+               </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
