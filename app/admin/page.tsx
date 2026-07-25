@@ -159,6 +159,26 @@ export default function AdminPage() {
     }
   }
 
+  // --- NOVA FUNÇÃO PARA ZERAR O HISTÓRICO DE WHATSAPP ---
+  const resetarEnviosWhatsApp = async () => {
+    if (confirm('Tem certeza que deseja zerar o histórico do WhatsApp? Todos os contatos voltarão para a lista "Falta Enviar" para uma nova campanha.')) {
+      const idsParaLimpar = perfis.filter(p => p.ultimo_whats_enviado != null).map(p => p.id)
+      
+      if (idsParaLimpar.length === 0) {
+        return mostrarNotificacao('Nenhum histórico para limpar.', 'sucesso')
+      }
+
+      const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: null }).in('id', idsParaLimpar)
+      
+      if (error) {
+        mostrarNotificacao('Erro ao zerar lista.', 'erro')
+      } else {
+        mostrarNotificacao('Lista zerada! Pronta para a próxima campanha.', 'sucesso')
+        carregarPerfis()
+      }
+    }
+  }
+
   const baixarCSV = () => {
     const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
     const linhas = perfis.map(p => [
@@ -763,10 +783,16 @@ export default function AdminPage() {
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                <div className="p-4 bg-emerald-50 border-b border-emerald-200 flex justify-between items-center">
                  <span className="font-bold text-emerald-900">Listagem de Contatos (Com WhatsApp)</span>
-                 <div className="flex gap-2">
+                 <div className="flex gap-2 items-center">
                    <button onClick={() => setFiltroWhats('todos')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'todos' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Todos ({clientesComWhatsapp.length})</button>
                    <button onClick={() => setFiltroWhats('nao_enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'nao_enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Falta Enviar</button>
                    <button onClick={() => setFiltroWhats('enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Já Enviados</button>
+                   
+                   <span className="text-emerald-300 mx-1">|</span>
+                   
+                   <button onClick={resetarEnviosWhatsApp} className="px-3 py-1 rounded text-xs font-bold bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 shadow-sm transition-colors">
+                     🔄 Resetar Lista
+                   </button>
                  </div>
                </div>
                
