@@ -10,7 +10,7 @@ type MeuAnuncio = {
   id: string
   nome: string
   email: string
-  telefone?: string // Adicionado o Telefone para o WhatsApp
+  telefone?: string 
   link_site: string
   descricao: string
   titulo_ebook: string
@@ -84,13 +84,11 @@ export default function ClienteDashboard() {
   const salvarEdicao = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // TRAVA DE SEGURANÇA: Imagem é OBRIGATÓRIA
     if (!anuncioEmEdicao.imagem_url) {
       alert('⚠️ Atenção: O upload da Capa do Material é obrigatório antes de salvar!')
       return
     }
     
-    // Atualizar um anúncio existente
     if (telaAtiva === 'editar' && anuncioEmEdicao.id) {
       const { error } = await supabase.from('profiles').update({
           titulo_ebook: anuncioEmEdicao.titulo_ebook,
@@ -110,7 +108,6 @@ export default function ClienteDashboard() {
       if (usuarioLogado) buscarMeusAnuncios(usuarioLogado)
     } 
     
-    // Cadastrar um NOVO anúncio
     else if (telaAtiva === 'novo') {
       const { error } = await supabase.from('profiles').insert([{
           id: crypto.randomUUID(), 
@@ -143,7 +140,6 @@ export default function ClienteDashboard() {
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-5xl mx-auto">
         
-        {/* Cabeçalho do Painel */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
             <div>
               <h1 className="text-2xl font-serif font-bold text-slate-900">Meu Painel</h1>
@@ -163,7 +159,6 @@ export default function ClienteDashboard() {
             </div>
         </div>
 
-        {/* ALERTA DE RESGATE DE CARRINHO */}
         {telaAtiva === 'lista' && temAnuncioPendente && (
           <div className="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-r-2xl shadow-sm mb-8 flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
@@ -183,7 +178,6 @@ export default function ClienteDashboard() {
           </div>
         )}
 
-        {/* Lista de Anúncios */}
         {telaAtiva === 'lista' && anuncios.map(anuncio => (
             <div key={anuncio.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -210,7 +204,6 @@ export default function ClienteDashboard() {
             </div>
         ))}
 
-        {/* Formulário de Edição e Criação */}
         {(telaAtiva === 'editar' || telaAtiva === 'novo') && (
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-2xl mx-auto">
                 <h2 className="text-2xl font-serif font-bold text-slate-900 mb-6">
@@ -250,11 +243,13 @@ export default function ClienteDashboard() {
                     <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
                         <label className="block text-sm font-medium text-slate-900 mb-2">Capa do Material *</label>
                         
+                        {/* A TRAVA INTELIGENTE FICA NESTA LINHA ABAIXO (required) */}
                         <input 
                           type="file" 
                           accept="image/*"
                           onChange={handleUploadCapa} 
                           disabled={uploading}
+                          required={!anuncioEmEdicao.imagem_url} 
                           className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 transition-colors cursor-pointer mb-2" 
                         />
                         

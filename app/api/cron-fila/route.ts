@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. HORÁRIO ATUAL EXATO (Sem subtrair horas, pois o banco já entende UTC)
+    // 1. HORÁRIO ATUAL EXATO
     const limiteHorario = new Date();
 
     // 2. BUSCA NA FILA
@@ -60,19 +60,23 @@ export async function GET(request: Request) {
         }
 
         // ==========================================
-        // CORREÇÃO DO BOTÃO: INTELIGENTE E SEGURO
+        // CORREÇÃO DO BOTÃO: MÁSCARA DE RASTREIO INJETADA
         // ==========================================
         let htmlBotao = '';
         
         // Só constrói o bloco do botão se realmente existir um link salvo no banco
         if (item.url_botao && item.url_botao.trim() !== '') {
           
-          // Usando o link direto para evitar bloqueios do Gmail por causa de localhost
-          const linkSeguro = item.url_botao;
+          // Define a raiz do site para montar o link (ex: https://seusite.com.br)
+          const urlBaseSite = process.env.NEXT_PUBLIC_SITE_URL || item.base_url || 'https://vitrine-ebooks.vercel.app';
+          
+          // O SEGREDO ESTÁ AQUI: Criamos o link que passa pela nossa API primeiro!
+          // encodeURIComponent garante que links complexos (com ? ou &) não quebrem a URL
+          const linkDeRastreio = `${urlBaseSite}/api/track?id=${item.perfil_id}&url=${encodeURIComponent(item.url_botao)}`;
           
           htmlBotao = `
             <div style="text-align: center; margin-top: 30px;">
-                <a href="${linkSeguro}" target="_blank" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                <a href="${linkDeRastreio}" target="_blank" style="display: inline-block; background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                     ${item.texto_botao || 'Acessar Minha Oferta'}
                 </a>
             </div>
