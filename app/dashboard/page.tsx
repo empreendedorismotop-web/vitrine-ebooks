@@ -10,6 +10,7 @@ type MeuAnuncio = {
   id: string
   nome: string
   email: string
+  telefone?: string // Adicionado o Telefone para o WhatsApp
   link_site: string
   descricao: string
   titulo_ebook: string
@@ -82,12 +83,19 @@ export default function ClienteDashboard() {
 
   const salvarEdicao = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // TRAVA DE SEGURANÇA: Imagem é OBRIGATÓRIA
+    if (!anuncioEmEdicao.imagem_url) {
+      alert('⚠️ Atenção: O upload da Capa do Material é obrigatório antes de salvar!')
+      return
+    }
     
     // Atualizar um anúncio existente
     if (telaAtiva === 'editar' && anuncioEmEdicao.id) {
       const { error } = await supabase.from('profiles').update({
           titulo_ebook: anuncioEmEdicao.titulo_ebook,
           link_site: anuncioEmEdicao.link_site,
+          telefone: anuncioEmEdicao.telefone,
           descricao: anuncioEmEdicao.descricao, 
           imagem_url: anuncioEmEdicao.imagem_url
         }).eq('id', anuncioEmEdicao.id)
@@ -108,6 +116,7 @@ export default function ClienteDashboard() {
           id: crypto.randomUUID(), 
           nome: anuncioEmEdicao.nome || 'Autor',
           email: usuarioLogado,
+          telefone: anuncioEmEdicao.telefone,
           link_site: anuncioEmEdicao.link_site,
           descricao: anuncioEmEdicao.descricao,
           titulo_ebook: anuncioEmEdicao.titulo_ebook,
@@ -128,7 +137,6 @@ export default function ClienteDashboard() {
 
   if (carregando) return <div className="p-8 text-center mt-20 font-bold text-slate-500">Carregando seu painel...</div>
 
-  // Verifica se existe algum anúncio travado como pendente
   const temAnuncioPendente = anuncios.some(a => a.status?.toLowerCase() === 'pendente')
 
   return (
@@ -155,7 +163,7 @@ export default function ClienteDashboard() {
             </div>
         </div>
 
-        {/* ALERTA DE RESGATE DE CARRINHO (Só aparece se tiver anúncio pendente) */}
+        {/* ALERTA DE RESGATE DE CARRINHO */}
         {telaAtiva === 'lista' && temAnuncioPendente && (
           <div className="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-r-2xl shadow-sm mb-8 flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
@@ -182,7 +190,6 @@ export default function ClienteDashboard() {
                   <h2 className="font-bold text-xl text-slate-900 mb-1 flex items-center flex-wrap gap-2">
                     {anuncio.titulo_ebook || 'Produto sem título'}
                     
-                    {/* ETIQUETA DE STATUS VISUAL */}
                     <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-md tracking-wide border ${
                       anuncio.status?.toLowerCase() === 'ativo' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                       anuncio.status?.toLowerCase() === 'pendente' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
@@ -214,28 +221,34 @@ export default function ClienteDashboard() {
                     
                     {telaAtiva === 'novo' && (
                       <div>
-                        <label className="block text-sm font-medium text-slate-900 mb-1">Seu Nome / Autor</label>
+                        <label className="block text-sm font-medium text-slate-900 mb-1">Seu Nome / Autor *</label>
                         <input type="text" required value={anuncioEmEdicao.nome || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, nome: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="Como você assina a obra" />
                       </div>
                     )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-900 mb-1">Título do E-book ou Curso</label>
-                      <input type="text" required value={anuncioEmEdicao.titulo_ebook || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, titulo_ebook: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="Digite o título" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-900 mb-1">Título do E-book ou Curso *</label>
+                        <input type="text" required value={anuncioEmEdicao.titulo_ebook || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, titulo_ebook: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="Digite o título" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-900 mb-1">WhatsApp / Telefone *</label>
+                        <input type="text" required value={anuncioEmEdicao.telefone || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, telefone: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="Ex: 61982..." />
+                      </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-900 mb-1">Link do Site / Checkout</label>
+                      <label className="block text-sm font-medium text-slate-900 mb-1">Link do Site / Checkout *</label>
                       <input type="url" required value={anuncioEmEdicao.link_site || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, link_site: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="https://..." />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-900 mb-1">Descrição</label>
-                      <textarea required value={anuncioEmEdicao.descricao || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, descricao: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="Descrição do material" rows={4} />
+                      <label className="block text-sm font-medium text-slate-900 mb-1">Descrição do Material *</label>
+                      <textarea required value={anuncioEmEdicao.descricao || ''} onChange={e => setAnuncioEmEdicao({...anuncioEmEdicao, descricao: e.target.value})} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600 transition-all" placeholder="Texto que aparece na vitrine..." rows={4} />
                     </div>
                     
                     <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
-                        <label className="block text-sm font-medium text-slate-900 mb-2">Capa do Material</label>
+                        <label className="block text-sm font-medium text-slate-900 mb-2">Capa do Material *</label>
                         
                         <input 
                           type="file" 
