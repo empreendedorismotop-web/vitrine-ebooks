@@ -70,17 +70,23 @@ export default function AdminPage() {
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
   const [filtroWhats, setFiltroWhats] = useState<'todos' | 'nao_enviados' | 'enviados'>('todos')
-  const [textoWhatsCampanha, setTextoWhatsCampanha] = useState('Olá! Acabamos de liberar uma novidade na Vitrine.')
+  
+  // MENSAGEM DO WHATSAPP INICIA VAZIA AGORA
+  const [textoWhatsCampanha, setTextoWhatsCampanha] = useState('')
 
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
   const [diasInatividade, setDiasInatividade] = useState(90)
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
   const [uploading, setUploading] = useState(false) 
 
-  // ESTADOS DO MODAL DE IMPORTAÇÃO
+  // ESTADOS DO MODAL DE IMPORTAÇÃO E LISTAS
   const [modalImportacaoAberto, setModalImportacaoAberto] = useState(false)
   const [textoImportacao, setTextoImportacao] = useState('')
+  const [nomeListaImportacao, setNomeListaImportacao] = useState('')
   const [importando, setImportando] = useState(false)
+  
+  // Estado para filtrar por Nome da Lista ou Clientes Oficiais
+  const [filtroListaAtual, setFiltroListaAtual] = useState('todos')
 
   useEffect(() => {
     setIsClient(true)
@@ -142,7 +148,7 @@ export default function AdminPage() {
   }
 
   // ==========================================
-  // FUNÇÃO: IMPORTAÇÃO DE LEADS
+  // FUNÇÃO: IMPORTAÇÃO DE LEADS COM NOME DE LISTA
   // ==========================================
   const processarImportacao = async () => {
     if (!textoImportacao.trim()) {
@@ -152,6 +158,9 @@ export default function AdminPage() {
     setImportando(true)
     const linhas = textoImportacao.split('\n').map(l => l.trim()).filter(l => l !== '')
     const novosLeads = []
+    
+    // O nome da lista é salvo no campo titulo_ebook para organizarmos
+    const nomeDaListaFinal = nomeListaImportacao.trim() !== '' ? `Lista: ${nomeListaImportacao.trim()}` : 'Lista Importada Padrão'
 
     for (const linha of linhas) {
       const isEmail = linha.includes('@')
@@ -161,7 +170,7 @@ export default function AdminPage() {
         nome: 'Lead Importado',
         email: isEmail ? linha : `sem-email-${crypto.randomUUID().substring(0,6)}@importado.com`,
         telefone: isEmail ? null : linha,
-        titulo_ebook: 'Material Indefinido',
+        titulo_ebook: nomeDaListaFinal,
         link_site: 'https://vitrine-ebooks.vercel.app',
         plano_selecionado: 'Importado',
         status: 'inativo' 
@@ -179,38 +188,45 @@ export default function AdminPage() {
       mostrarNotificacao('Erro ao importar contatos.', 'erro')
       console.error(error)
     } else {
-      mostrarNotificacao(`${novosLeads.length} contatos importados com sucesso!`, 'sucesso')
+      mostrarNotificacao(`${novosLeads.length} contatos importados para a ${nomeDaListaFinal}!`, 'sucesso')
       setModalImportacaoAberto(false)
       setTextoImportacao('')
+      setNomeListaImportacao('')
       carregarPerfis()
     }
     setImportando(false)
   }
 
   // ==========================================
-  // NOVA FUNÇÃO: EXCLUIR LEADS IMPORTADOS
+  // FUNÇÃO: EXCLUIR LEADS IMPORTADOS (INTEGRADA COM O FILTRO)
   // ==========================================
   const excluirLeadsImportados = async () => {
-      // Identifica os leads que foram criados pela ferramenta de importação
-      const leadsParaExcluir = perfis.filter(p => 
-          p.nome === 'Lead Importado' || 
-          p.plano_selecionado === 'Importado' ||
-          (p.email && p.email.includes('@importado.com'))
-      )
+      // Pega todos os leads que são importados
+      let leadsParaExcluir = perfis.filter(p => p.plano_selecionado === 'Importado')
 
-      if (leadsParaExcluir.length === 0) {
-          return mostrarNotificacao('Nenhum lead importado encontrado para exclusão.', 'sucesso')
+      // Se estiver filtrando uma lista específica, apaga só ela!
+      if (filtroListaAtual !== 'todos' && filtroListaAtual !== 'vitrine') {
+         leadsParaExcluir = leadsParaExcluir.filter(p => p.titulo_ebook === filtroListaAtual)
       }
 
-      if (confirm(`Tem certeza que deseja apagar ${leadsParaExcluir.length} leads importados? Esta ação é irreversível.`)) {
+      if (leadsParaExcluir.length === 0) {
+          return mostrarNotificacao('Nenhum lead importado encontrado para exclusão neste filtro.', 'sucesso')
+      }
+
+      const mensagemConfirmacao = filtroListaAtual === 'todos' 
+        ? `🚨 Tem certeza que deseja apagar TODOS os ${leadsParaExcluir.length} leads de TODAS as listas importadas?`
+        : `🚨 Tem certeza que deseja apagar APENAS a lista "${filtroListaAtual}" (${leadsParaExcluir.length} contatos)?`
+
+      if (confirm(mensagemConfirmacao)) {
           const idsParaExcluir = leadsParaExcluir.map(p => p.id)
           const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
 
           if (error) {
               mostrarNotificacao('Erro ao apagar leads importados.', 'erro')
           } else {
-              mostrarNotificacao(`${idsParaExcluir.length} leads importados apagados com sucesso!`, 'sucesso')
-              setSelecionados([]) // Limpa seleções pendentes
+              mostrarNotificacao(`${idsParaExcluir.length} leads apagados com sucesso!`, 'sucesso')
+              setSelecionados([]) 
+              if (filtroListaAtual !== 'todos') setFiltroListaAtual('todos') // Reseta o filtro se apagou a lista atual
               carregarPerfis()
           }
       }
@@ -218,14 +234,12 @@ export default function AdminPage() {
 
 
   // --- FORMATA LINKS WHATSAPP ---
-  // Apenas cria o link básico
   const formatarLinkWhatsApp = (numero?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
     return apenasNumeros.startsWith('55') ? `https://wa.me/${apenasNumeros}` : `https://wa.me/55${apenasNumeros}`
   }
 
-  // Cria o link com a mensagem predefinida
   const formatarLinkWhatsAppCampanha = (numero?: string, mensagem?: string) => {
     const base = formatarLinkWhatsApp(numero)
     if (base === '#') return base;
@@ -235,6 +249,7 @@ export default function AdminPage() {
     return base
   }
 
+  // O clique mágico que muda para "Enviado"
   const marcarWhatsAppEnviado = async (id: string) => {
     const agora = new Date().toISOString()
     const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: agora }).eq('id', id)
@@ -244,11 +259,12 @@ export default function AdminPage() {
   }
 
   const resetarEnviosWhatsApp = async () => {
-    if (confirm('Tem certeza que deseja zerar o histórico do WhatsApp? Todos os contatos voltarão para a lista "Falta Enviar" para uma nova campanha.')) {
-      const idsParaLimpar = perfis.filter(p => p.ultimo_whats_enviado != null).map(p => p.id)
+    if (confirm('Tem certeza que deseja zerar o histórico do WhatsApp? Todos os contatos do filtro atual voltarão para a lista "Falta Enviar" para uma nova campanha.')) {
+      // Respeita o filtro de lista atual para resetar só quem precisa
+      const idsParaLimpar = clientesWhatsAppFiltrados.filter(p => p.ultimo_whats_enviado != null).map(p => p.id)
       
       if (idsParaLimpar.length === 0) {
-        return mostrarNotificacao('Nenhum histórico para limpar.', 'sucesso')
+        return mostrarNotificacao('Nenhum histórico para limpar nesta lista.', 'sucesso')
       }
 
       const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: null }).in('id', idsParaLimpar)
@@ -256,18 +272,18 @@ export default function AdminPage() {
       if (error) {
         mostrarNotificacao('Erro ao zerar lista.', 'erro')
       } else {
-        mostrarNotificacao('Lista zerada! Pronta para a próxima campanha.', 'sucesso')
+        mostrarNotificacao('Histórico zerado! Prontos para a próxima campanha.', 'sucesso')
         carregarPerfis()
       }
     }
   }
 
   const baixarCSV = () => {
-    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro']
+    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro', 'Lista']
     const linhas = perfis.map(p => [
         `"${p.nome || ''}"`, `"${p.email || ''}"`, `"${p.telefone || ''}"`, `"${p.status || ''}"`, `"${p.plano_selecionado || ''}"`,
         `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`, `"${p.cliques?.length || 0}"`,
-        `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`
+        `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`, `"${p.plano_selecionado === 'Importado' ? p.titulo_ebook : 'Orgânico'}"`
     ])
     const conteudo = [cabecalho, ...linhas].map(e => e.join(',')).join('\n')
     const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' })
@@ -481,13 +497,25 @@ export default function AdminPage() {
     setEnviandoMassa(false)
   }
 
-  // SEPARAÇÃO INTELIGENTE DE CONTATOS
+  // ==========================================
+  // SEPARAÇÃO INTELIGENTE DE CONTATOS & LISTAS
+  // ==========================================
   
-  // 1. Apenas contatos com E-mail VÁLIDO (Exclui os "@importado.com" falsos)
-  const clientesComEmailParaMassa = perfis.filter(p => p.email && !p.email.includes('@importado.com'))
+  // Extrai dinamicamente todas as listas importadas cadastradas no banco
+  const listasImportadasDisponiveis = Array.from(new Set(perfis.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
 
-  // 2. Apenas contatos com Telefone preenchido
-  const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '')
+  const aplicarFiltroLista = (p: Perfil) => {
+    if (filtroListaAtual === 'todos') return true;
+    if (filtroListaAtual === 'vitrine') return p.plano_selecionado !== 'Importado';
+    // Se não for 'todos' nem 'vitrine', é o nome de uma lista específica
+    return p.titulo_ebook === filtroListaAtual && p.plano_selecionado === 'Importado';
+  }
+
+  // 1. Apenas contatos com E-mail VÁLIDO (Exclui os "@importado.com" falsos) - Respeitando o Filtro
+  const clientesComEmailParaMassa = perfis.filter(p => p.email && !p.email.includes('@importado.com')).filter(aplicarFiltroLista)
+
+  // 2. Apenas contatos com Telefone preenchido - Respeitando o Filtro
+  const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
   
   const clientesWhatsAppFiltrados = clientesComWhatsapp.filter(p => {
     if (filtroWhats === 'todos') return true
@@ -496,7 +524,7 @@ export default function AdminPage() {
     return true
   })
 
-  // Funções de Seleção de Massa (baseadas APENAS na lista limpa de emails)
+  // Funções de Seleção de Massa (baseadas APENAS na lista limpa de emails atual)
   const toggleSelecao = (id: string) => setSelecionados(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])
   const selecionarMassa = (qtd: number) => setSelecionados(clientesComEmailParaMassa.slice(0, qtd).map(p => p.id))
   const selecionarTodos = () => setSelecionados(clientesComEmailParaMassa.map(p => p.id))
@@ -527,13 +555,21 @@ export default function AdminPage() {
             </div>
             
             <div className="p-6">
-              <p className="text-sm text-slate-600 mb-4">
-                Cole abaixo a sua lista. Coloque <strong>apenas 1 item por linha</strong>. <br/>
-                Eles serão salvos como "Inativos" (não aparecem na vitrine) para você enviar campanhas depois.
-              </p>
               
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-slate-700 mb-1">Nome da Lista (Opcional)</label>
+                <input 
+                  type="text" 
+                  value={nomeListaImportacao} 
+                  onChange={e => setNomeListaImportacao(e.target.value)} 
+                  className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-emerald-500" 
+                  placeholder="Ex: Leads Ebook Agosto" 
+                />
+              </div>
+
+              <p className="text-sm text-slate-600 mb-2 font-bold">Cole os dados (1 por linha):</p>
               <textarea 
-                rows={10} 
+                rows={8} 
                 className="w-full p-4 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm font-mono"
                 placeholder="exemplo@gmail.com&#10;5511999999999&#10;outro@email.com&#10;..."
                 value={textoImportacao}
@@ -696,7 +732,6 @@ export default function AdminPage() {
              <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm">📊 Baixar CSV</button>
              <button onClick={() => setModalImportacaoAberto(true)} className="px-4 py-2 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-lg text-sm hover:bg-emerald-100 shadow-sm">📥 Importar Leads</button>
              <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm">🧹 Limpar Frios</button>
-             {/* NOVO BOTÃO: APAGAR LEADS IMPORTADOS */}
              <button onClick={excluirLeadsImportados} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg text-sm hover:bg-red-700 shadow-sm ml-2">🗑️ Apagar Importados</button>
           </div>
           
@@ -843,12 +878,29 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* 📧 ABA DE E-MAIL EM MASSA */}
         {abaAtiva === 'campanhas' && (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-               <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                 <span className="font-bold text-slate-700">Selecione (Total: {clientesComEmailParaMassa.length})</span>
-                 <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold">{selecionados.length} marcados</span>
+               <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                 
+                 {/* FILTRO DE LISTA - E-MAIL */}
+                 <div className="flex items-center gap-2">
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filtrar:</label>
+                   <select 
+                     value={filtroListaAtual} 
+                     onChange={(e) => { setFiltroListaAtual(e.target.value); setSelecionados([]) }} 
+                     className="text-sm font-bold bg-white text-slate-700 border border-slate-300 rounded p-1.5 outline-none"
+                   >
+                     <option value="todos">Todos os Contatos Válidos</option>
+                     <option value="vitrine">Apenas Clientes da Vitrine</option>
+                     {listasImportadasDisponiveis.map(lista => (
+                       <option key={lista} value={lista}>{lista}</option>
+                     ))}
+                   </select>
+                 </div>
+
+                 <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold shadow-sm">{selecionados.length} / {clientesComEmailParaMassa.length} marcados</span>
                </div>
                <div className="p-4 border-b border-slate-200 flex flex-wrap gap-2 bg-white">
                  <button onClick={() => selecionarMassa(50)} type="button" className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-md">Selecionar 50</button>
@@ -872,6 +924,10 @@ export default function AdminPage() {
                      </div>
                    </label>
                  ))}
+                 
+                 {clientesComEmailParaMassa.length === 0 && (
+                   <div className="p-8 text-center text-slate-500 font-bold">Nenhum e-mail válido encontrado para este filtro.</div>
+                 )}
                </div>
             </div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
@@ -914,20 +970,36 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* 💬 ABA DE WHATSAPP DIRETO */}
         {abaAtiva === 'whatsapp' && (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-               <div className="p-4 bg-emerald-50 border-b border-emerald-200 flex justify-between items-center">
-                 <span className="font-bold text-emerald-900">Listagem de Contatos (Com WhatsApp)</span>
-                 <div className="flex gap-2 items-center">
-                   <button onClick={() => setFiltroWhats('todos')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'todos' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Todos ({clientesComWhatsapp.length})</button>
+               
+               <div className="p-4 bg-emerald-50 border-b border-emerald-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                 
+                 {/* FILTRO DE LISTA - WHATSAPP */}
+                 <div className="flex items-center gap-2">
+                   <label className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Filtrar:</label>
+                   <select 
+                     value={filtroListaAtual} 
+                     onChange={(e) => setFiltroListaAtual(e.target.value)} 
+                     className="text-sm font-bold bg-white text-emerald-900 border border-emerald-300 rounded p-1.5 outline-none"
+                   >
+                     <option value="todos">Todos os Contatos c/ Whats</option>
+                     <option value="vitrine">Apenas Clientes da Vitrine</option>
+                     {listasImportadasDisponiveis.map(lista => (
+                       <option key={lista} value={lista}>{lista}</option>
+                     ))}
+                   </select>
+                 </div>
+                 
+                 <div className="flex flex-wrap gap-2 items-center">
+                   <button onClick={() => setFiltroWhats('todos')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'todos' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Todos ({clientesWhatsAppFiltrados.length})</button>
                    <button onClick={() => setFiltroWhats('nao_enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'nao_enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Falta Enviar</button>
                    <button onClick={() => setFiltroWhats('enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Já Enviados</button>
-                   
                    <span className="text-emerald-300 mx-1">|</span>
-                   
                    <button onClick={resetarEnviosWhatsApp} className="px-3 py-1 rounded text-xs font-bold bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 shadow-sm transition-colors">
-                     🔄 Resetar Lista
+                     🔄 Resetar
                    </button>
                  </div>
                </div>
@@ -967,28 +1039,26 @@ export default function AdminPage() {
             </div>
             
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
-               <h3 className="font-bold text-xl text-slate-900 mb-2">Mensagem Padrão</h3>
-               <p className="text-sm text-slate-500 mb-6">Esta mensagem será preenchida automaticamente ao abrir o WhatsApp do cliente.</p>
+               <h3 className="font-bold text-xl text-slate-900 mb-2">Mensagem do Disparo</h3>
+               <p className="text-sm text-slate-500 mb-6">Deixe em branco ou digite um texto para enviar para a lista selecionada.</p>
                
                <div className="space-y-4">
                  <div>
-                   <label className="block text-sm font-bold mb-1 text-slate-700">Texto da Mensagem</label>
                    <textarea 
                      value={textoWhatsCampanha} 
                      onChange={e => setTextoWhatsCampanha(e.target.value)} 
                      rows={8} 
                      className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg outline-none focus:border-emerald-500 transition-colors" 
-                     placeholder="Digite a mensagem de oferta..." 
+                     placeholder="Digite a mensagem ou cole o seu link..." 
                    />
                  </div>
                  
                  <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
-                   <p className="text-xs text-emerald-800 font-bold mb-2">💡 Como funciona o fluxo manual:</p>
+                   <p className="text-xs text-emerald-800 font-bold mb-2">💡 Dica de Disparo:</p>
                    <ul className="text-xs text-emerald-700 space-y-1 list-disc pl-4">
-                     <li>Edite a mensagem acima.</li>
-                     <li>Clique em "Abrir Conversa" na lista.</li>
-                     <li>O sistema registrará automaticamente a data e hora do envio no botão.</li>
-                     <li>Use o filtro "Falta Enviar" para continuar de onde parou.</li>
+                     <li>Selecione a sua lista no filtro do topo.</li>
+                     <li>Filtre por "Falta Enviar".</li>
+                     <li>Ao clicar em "Abrir Conversa", o status atualiza e a pessoa some da lista "Falta Enviar" para você não mandar duplicado.</li>
                    </ul>
                  </div>
                </div>
