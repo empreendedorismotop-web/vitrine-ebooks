@@ -77,7 +77,7 @@ export default function AdminPage() {
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
   const [uploading, setUploading] = useState(false) 
 
-  // ESTADOS DO NOVO MODAL DE IMPORTAÇÃO
+  // ESTADOS DO MODAL DE IMPORTAÇÃO
   const [modalImportacaoAberto, setModalImportacaoAberto] = useState(false)
   const [textoImportacao, setTextoImportacao] = useState('')
   const [importando, setImportando] = useState(false)
@@ -142,7 +142,7 @@ export default function AdminPage() {
   }
 
   // ==========================================
-  // NOVA FUNÇÃO: IMPORTAÇÃO DE LEADS
+  // FUNÇÃO: IMPORTAÇÃO DE LEADS
   // ==========================================
   const processarImportacao = async () => {
     if (!textoImportacao.trim()) {
@@ -150,25 +150,21 @@ export default function AdminPage() {
     }
 
     setImportando(true)
-    
-    // Separa o texto por quebras de linha e limpa espaços vazios
     const linhas = textoImportacao.split('\n').map(l => l.trim()).filter(l => l !== '')
-    
     const novosLeads = []
 
     for (const linha of linhas) {
       const isEmail = linha.includes('@')
       
-      // Cria um lead fictício para não aparecer na vitrine, mas ficar disponível para campanhas
       novosLeads.push({
         id: crypto.randomUUID(),
         nome: 'Lead Importado',
-        email: isEmail ? linha : `sem-email-${crypto.randomUUID().substring(0,6)}@importado.com`, // Se for só telefone, cria um e-mail fake obrigatório pro banco
+        email: isEmail ? linha : `sem-email-${crypto.randomUUID().substring(0,6)}@importado.com`,
         telefone: isEmail ? null : linha,
         titulo_ebook: 'Material Indefinido',
         link_site: 'https://vitrine-ebooks.vercel.app',
         plano_selecionado: 'Importado',
-        status: 'inativo' // Nasce inativo para não ir pra vitrine
+        status: 'inativo' 
       })
     }
 
@@ -191,12 +187,49 @@ export default function AdminPage() {
     setImportando(false)
   }
 
-  const formatarLinkWhatsAppCampanha = (numero?: string, mensagem?: string) => {
+  // ==========================================
+  // NOVA FUNÇÃO: EXCLUIR LEADS IMPORTADOS
+  // ==========================================
+  const excluirLeadsImportados = async () => {
+      // Identifica os leads que foram criados pela ferramenta de importação
+      const leadsParaExcluir = perfis.filter(p => 
+          p.nome === 'Lead Importado' || 
+          p.plano_selecionado === 'Importado' ||
+          (p.email && p.email.includes('@importado.com'))
+      )
+
+      if (leadsParaExcluir.length === 0) {
+          return mostrarNotificacao('Nenhum lead importado encontrado para exclusão.', 'sucesso')
+      }
+
+      if (confirm(`Tem certeza que deseja apagar ${leadsParaExcluir.length} leads importados? Esta ação é irreversível.`)) {
+          const idsParaExcluir = leadsParaExcluir.map(p => p.id)
+          const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
+
+          if (error) {
+              mostrarNotificacao('Erro ao apagar leads importados.', 'erro')
+          } else {
+              mostrarNotificacao(`${idsParaExcluir.length} leads importados apagados com sucesso!`, 'sucesso')
+              setSelecionados([]) // Limpa seleções pendentes
+              carregarPerfis()
+          }
+      }
+  }
+
+
+  // --- FORMATA LINKS WHATSAPP ---
+  // Apenas cria o link básico
+  const formatarLinkWhatsApp = (numero?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
-    const base = apenasNumeros.startsWith('55') ? `https://wa.me/${apenasNumeros}` : `https://wa.me/55${apenasNumeros}`
-    
-    if (mensagem) {
+    return apenasNumeros.startsWith('55') ? `https://wa.me/${apenasNumeros}` : `https://wa.me/55${apenasNumeros}`
+  }
+
+  // Cria o link com a mensagem predefinida
+  const formatarLinkWhatsAppCampanha = (numero?: string, mensagem?: string) => {
+    const base = formatarLinkWhatsApp(numero)
+    if (base === '#') return base;
+    if (mensagem && mensagem.trim() !== '') {
        return `${base}?text=${encodeURIComponent(mensagem)}`
     }
     return base
@@ -421,7 +454,10 @@ export default function AdminPage() {
     setEnviandoMassa(true)
     
     const listaFinalIds = selecionados.slice(0, qtdEnvioDesejada)
-    const clientesParaEnviar = perfis.filter(p => listaFinalIds.includes(p.id))
+    
+    // ATENÇÃO AQUI: Filtrar os IDs da lista principal (que já foram previamente filtrados para ter e-mail real)
+    const clientesParaEnviar = clientesComEmailParaMassa.filter(p => listaFinalIds.includes(p.id))
+    
     const lotes = []
     for (let i = 0; i < clientesParaEnviar.length; i += tamanhoLote) lotes.push(clientesParaEnviar.slice(i, i + tamanhoLote))
 
@@ -445,13 +481,12 @@ export default function AdminPage() {
     setEnviandoMassa(false)
   }
 
-  const toggleSelecao = (id: string) => setSelecionados(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])
-  const selecionarMassa = (qtd: number) => setSelecionados(perfis.filter(p => p.email).slice(0, qtd).map(p => p.id))
-  const selecionarTodos = () => setSelecionados(perfis.filter(p => p.email).map(p => p.id))
+  // SEPARAÇÃO INTELIGENTE DE CONTATOS
+  
+  // 1. Apenas contatos com E-mail VÁLIDO (Exclui os "@importado.com" falsos)
+  const clientesComEmailParaMassa = perfis.filter(p => p.email && !p.email.includes('@importado.com'))
 
-  const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
-  const filaFiltrada = fila.filter(item => item.status === abaFila)
-
+  // 2. Apenas contatos com Telefone preenchido
   const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '')
   
   const clientesWhatsAppFiltrados = clientesComWhatsapp.filter(p => {
@@ -460,6 +495,15 @@ export default function AdminPage() {
     if (filtroWhats === 'nao_enviados') return p.ultimo_whats_enviado == null
     return true
   })
+
+  // Funções de Seleção de Massa (baseadas APENAS na lista limpa de emails)
+  const toggleSelecao = (id: string) => setSelecionados(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])
+  const selecionarMassa = (qtd: number) => setSelecionados(clientesComEmailParaMassa.slice(0, qtd).map(p => p.id))
+  const selecionarTodos = () => setSelecionados(clientesComEmailParaMassa.map(p => p.id))
+
+  const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
+  const filaFiltrada = fila.filter(item => item.status === abaFila)
+
 
   if (!autorizado) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">Verificando Credenciais...</div>
@@ -650,9 +694,10 @@ export default function AdminPage() {
           
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
              <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm">📊 Baixar CSV</button>
-             {/* NOVO BOTÃO DE IMPORTAR AQUI */}
              <button onClick={() => setModalImportacaoAberto(true)} className="px-4 py-2 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-lg text-sm hover:bg-emerald-100 shadow-sm">📥 Importar Leads</button>
              <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm">🧹 Limpar Frios</button>
+             {/* NOVO BOTÃO: APAGAR LEADS IMPORTADOS */}
+             <button onClick={excluirLeadsImportados} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg text-sm hover:bg-red-700 shadow-sm ml-2">🗑️ Apagar Importados</button>
           </div>
           
           <button onClick={() => setAbaAtiva('fila')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ml-auto ${abaAtiva === 'fila' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-700 border border-indigo-200'}`}>
@@ -676,7 +721,7 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2 mt-1">
                         <p className="text-sm text-slate-600">{perfil.email}</p>
                         {perfil.telefone && (
-                          <a href={formatarLinkWhatsAppCampanha(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
+                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
                             💬 Whats
                           </a>
                         )}
@@ -802,7 +847,7 @@ export default function AdminPage() {
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                 <span className="font-bold text-slate-700">Selecione (Total: {perfis.length})</span>
+                 <span className="font-bold text-slate-700">Selecione (Total: {clientesComEmailParaMassa.length})</span>
                  <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-bold">{selecionados.length} marcados</span>
                </div>
                <div className="p-4 border-b border-slate-200 flex flex-wrap gap-2 bg-white">
@@ -811,7 +856,7 @@ export default function AdminPage() {
                  <button onClick={() => setSelecionados([])} type="button" className="px-3 py-1.5 text-xs font-bold bg-red-50 text-red-600 hover:bg-red-100 rounded-md ml-auto">Limpar</button>
                </div>
                <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
-                 {perfis.map((p) => (
+                 {clientesComEmailParaMassa.map((p) => (
                    <label key={p.id} className={`p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 ${selecionados.includes(p.id) ? 'bg-blue-50/50' : ''}`}>
                      <input type="checkbox" checked={selecionados.includes(p.id)} onChange={() => toggleSelecao(p.id)} className="size-5 text-blue-600 rounded" />
                      <div className="flex-1">
@@ -819,7 +864,7 @@ export default function AdminPage() {
                          {p.nome} 
                          <span className="font-normal text-sm text-slate-500">({p.email})</span>
                          {p.telefone && (
-                           <a href={formatarLinkWhatsAppCampanha(p.telefone)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors">
+                           <a href={formatarLinkWhatsApp(p.telefone)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors">
                              💬 Whats
                            </a>
                          )}
