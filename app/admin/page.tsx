@@ -44,14 +44,18 @@ type FilaItem = {
 export default function AdminPage() {
   const router = useRouter()
   const [autorizado, setAutorizado] = useState(false) 
+  const [isClient, setIsClient] = useState(false) // Trava para garantir que estamos no navegador
 
   // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
 
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [fila, setFila] = useState<FilaItem[]>([]) 
+  
+  // Abas iniciam padrão para o SSR do Next.js
   const [abaAtiva, setAbaAtiva] = useState('pendente')
   const [abaFila, setAbaFila] = useState('pendente') 
+  
   const [notificacao, setNotificacao] = useState({ mostrar: false, msg: '', tipo: '' })
   const [selecionados, setSelecionados] = useState<string[]>([])
   
@@ -70,9 +74,41 @@ export default function AdminPage() {
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
   const [uploading, setUploading] = useState(false) 
 
+  // ==========================================
+  // INTELIGÊNCIA: RECUPERAÇÃO DE ABAS SEGURA (Next.js)
+  // ==========================================
   useEffect(() => {
+    // 1. Marca que estamos rodando no cliente (navegador)
+    setIsClient(true)
+
+    // 2. Resgata a memória do navegador de forma segura
+    try {
+      const abaSalva = localStorage.getItem('vitrine_aba_ativa')
+      if (abaSalva) setAbaAtiva(abaSalva)
+        
+      const filaSalva = localStorage.getItem('vitrine_aba_fila')
+      if (filaSalva) setAbaFila(filaSalva)
+    } catch (e) {
+      console.warn("localStorage indisponível")
+    }
+
+    // 3. Continua com a segurança normal
     verificarSeguranca()
   }, [])
+
+  // Salva as abas ativas sempre que o usuário muda
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('vitrine_aba_ativa', abaAtiva)
+    }
+  }, [abaAtiva, isClient])
+
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('vitrine_aba_fila', abaFila)
+    }
+  }, [abaFila, isClient])
+  // ==========================================
 
   const verificarSeguranca = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -180,8 +216,14 @@ export default function AdminPage() {
     e.preventDefault();
     if (!perfilEditando) return;
 
+    if (!perfilEditando.imagem_url) {
+      mostrarNotificacao('⚠️ A imagem da capa é obrigatória!', 'erro');
+      return;
+    }
+
     const { error } = await supabase.from('profiles').update({
       nome: perfilEditando.nome,
+      telefone: perfilEditando.telefone, 
       titulo_ebook: perfilEditando.titulo_ebook,
       descricao: perfilEditando.descricao, 
       link_site: perfilEditando.link_site,
@@ -189,9 +231,9 @@ export default function AdminPage() {
     }).eq('id', perfilEditando.id);
 
     if (error) {
-      mostrarNotificacao('Erro ao salvar.', 'erro');
+      mostrarNotificacao('Erro ao salvar as edições.', 'erro');
     } else {
-      mostrarNotificacao('Anúncio atualizado com sucesso!', 'sucesso');
+      mostrarNotificacao('Anúncio e WhatsApp atualizados!', 'sucesso');
       setPerfilEditando(null); 
       carregarPerfis(); 
     }
@@ -332,6 +374,9 @@ export default function AdminPage() {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">Verificando Credenciais...</div>
   }
 
+  // Previne renderização completa se ainda não verificou cliente para evitar flicker
+  if (!isClient) return null; 
+
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
@@ -350,31 +395,40 @@ export default function AdminPage() {
               <form onSubmit={salvarEdicaoAnuncio} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Nome / Autor</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Nome / Autor *</label>
                     <input type="text" value={perfilEditando.nome || ''} onChange={e => setPerfilEditando({...perfilEditando, nome: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Título do Material</label>
-                    <input type="text" value={perfilEditando.titulo_ebook || ''} onChange={e => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" />
+                    <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp / Telefone *</label>
+                    <input type="text" value={perfilEditando.telefone || ''} onChange={e => setPerfilEditando({...perfilEditando, telefone: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Ex: 61982..." required />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Título do Material *</label>
+                    <input type="text" value={perfilEditando.titulo_ebook || ''} onChange={e => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino *</label>
+                    <input type="url" value={perfilEditando.link_site || ''} onChange={e => setPerfilEditando({...perfilEditando, link_site: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino</label>
-                  <input type="url" value={perfilEditando.link_site || ''} onChange={e => setPerfilEditando({...perfilEditando, link_site: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Descrição</label>
-                  <textarea rows={4} value={perfilEditando.descricao || ''} onChange={e => setPerfilEditando({...perfilEditando, descricao: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Texto que aparece na vitrine..." />
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Descrição *</label>
+                  <textarea rows={4} value={perfilEditando.descricao || ''} onChange={e => setPerfilEditando({...perfilEditando, descricao: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Texto que aparece na vitrine..." required />
                 </div>
                 
                 <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
-                    <label className="block text-sm font-bold text-slate-900 mb-2">Capa do Material</label>
+                    <label className="block text-sm font-bold text-slate-900 mb-2">Capa do Material *</label>
+                    
                     <input 
                       type="file" accept="image/*" onChange={handleUploadCapaAdmin} disabled={uploading}
+                      required={!perfilEditando.imagem_url} 
                       className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 transition-colors cursor-pointer mb-2" 
                     />
+                    
                     {uploading && <p className="text-sm font-bold text-purple-600 animate-pulse mt-2">Enviando imagem...</p>}
                     {perfilEditando.imagem_url && !uploading && (
                       <div className="mt-4 flex flex-col items-start bg-white p-4 rounded-lg border border-slate-200">
@@ -498,7 +552,6 @@ export default function AdminPage() {
                         <p className="text-sm text-slate-600">Site: {perfil.link_site || 'Não informado'}</p>
                       </div>
 
-                      {/* --- O VISUAL DOS CLIQUES VOLTOU AQUI --- */}
                       <div className="flex items-center gap-2 mt-2">
                         <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
                           🖱️ {perfil.cliques?.length || 0} Cliques
@@ -670,11 +723,11 @@ export default function AdminPage() {
                      <input type="number" min="1" required value={tamanhoLote} onChange={e => setTamanhoLote(Number(e.target.value))} className="w-full p-2 border border-indigo-200 rounded-md outline-none text-sm bg-white" />
                    </div>
                  </div>
-                 <div><label className="block text-sm font-bold mb-1">Assunto</label><input type="text" required value={assuntoCampanha} onChange={e => setAssuntoCampanha(e.target.value)} className="w-full p-3 border rounded-lg outline-none" /></div>
-                 <div><label className="block text-sm font-bold mb-1">Mensagem</label><textarea required value={textoCampanha} onChange={e => setTextoCampanha(e.target.value)} rows={4} className="w-full p-3 border rounded-lg outline-none" /></div>
+                 <div><label className="block text-sm font-bold mb-1">Assunto *</label><input type="text" required value={assuntoCampanha} onChange={e => setAssuntoCampanha(e.target.value)} className="w-full p-3 border rounded-lg outline-none" /></div>
+                 <div><label className="block text-sm font-bold mb-1">Mensagem *</label><textarea required value={textoCampanha} onChange={e => setTextoCampanha(e.target.value)} rows={4} className="w-full p-3 border rounded-lg outline-none" /></div>
                  <div className="grid grid-cols-2 gap-3">
-                   <div><label className="block text-xs font-bold mb-1">Texto do Botão</label><input type="text" required value={textoBotao} onChange={e => setTextoBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
-                   <div><label className="block text-xs font-bold mb-1">Link de Destino</label><input type="url" required value={urlBotao} onChange={e => setUrlBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
+                   <div><label className="block text-xs font-bold mb-1">Texto do Botão *</label><input type="text" required value={textoBotao} onChange={e => setTextoBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
+                   <div><label className="block text-xs font-bold mb-1">Link de Destino *</label><input type="url" required value={urlBotao} onChange={e => setUrlBotao(e.target.value)} className="w-full p-2 border rounded-lg outline-none text-sm" /></div>
                  </div>
                  <button type="submit" disabled={enviandoMassa || selecionados.length === 0} className="w-full mt-4 bg-blue-600 text-white font-bold p-4 rounded-lg hover:bg-blue-700 shadow-md">
                    {enviandoMassa ? 'Aguarde...' : `Enviar Lotes`}
