@@ -17,6 +17,7 @@ type MeuAnuncio = {
   plano_selecionado: string
   status: string
   imagem_url?: string
+  link_curto?: string // O novo campo adicionado para o encurtador
   cliques?: Clique[]
 }
 
@@ -62,13 +63,16 @@ export default function ClienteDashboard() {
   // ==========================================
   // FUNÇÃO DE COPIAR O LINK ENCURTADO
   // ==========================================
-  const copiarLinkDeDivulgacao = (id: string) => {
+  const copiarLinkDeDivulgacao = (anuncio: MeuAnuncio) => {
+    // Se não tiver link_curto ainda (anúncios antigos), usa o ID
+    const codigoParaLink = anuncio.link_curto || anuncio.id
+    
     // Monta o link para a página exclusiva que vamos criar
-    const urlEncurtada = `${window.location.origin}/p/${id}`
+    const urlEncurtada = `${window.location.origin}/p/${codigoParaLink}`
     
     // Copia para a área de transferência do dispositivo do cliente
     navigator.clipboard.writeText(urlEncurtada).then(() => {
-      setLinkCopiadoId(id)
+      setLinkCopiadoId(anuncio.id)
       // Remove o aviso de "Copiado" após 3 segundos
       setTimeout(() => setLinkCopiadoId(null), 3000) 
     })
@@ -127,6 +131,10 @@ export default function ClienteDashboard() {
     } 
     
     else if (telaAtiva === 'novo') {
+      
+      // GERA O CÓDIGO CURTO DE 6 CARACTERES
+      const codigoCurtoGerado = Math.random().toString(36).substring(2, 8)
+
       const { error } = await supabase.from('profiles').insert([{
           id: crypto.randomUUID(), 
           nome: anuncioEmEdicao.nome || 'Autor',
@@ -136,6 +144,7 @@ export default function ClienteDashboard() {
           descricao: anuncioEmEdicao.descricao,
           titulo_ebook: anuncioEmEdicao.titulo_ebook,
           imagem_url: anuncioEmEdicao.imagem_url,
+          link_curto: codigoCurtoGerado, // SALVA O CÓDIGO NO BANCO
           plano_selecionado: 'Pendente',
           status: 'pendente' 
         }])
@@ -217,10 +226,10 @@ export default function ClienteDashboard() {
                   
                   {/* NOVO BOTÃO: COPIAR LINK CURTO */}
                   <button 
-                    onClick={() => copiarLinkDeDivulgacao(anuncio.id)} 
+                    onClick={() => copiarLinkDeDivulgacao(anuncio)} 
                     className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 flex-1 md:flex-none justify-center ${linkCopiadoId === anuncio.id ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}`}
                   >
-                    {linkCopiadoId === anuncio.id ? '✅ Link Copiado!' : '🔗 Link Divulgação'}
+                    {linkCopiadoId === anuncio.id ? '✅ Link Copiado!' : '🔗 Copiar Link de Divulgação'}
                   </button>
 
                   <button 
