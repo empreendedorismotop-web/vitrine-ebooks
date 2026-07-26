@@ -34,11 +34,38 @@ export async function GET(request: Request) {
       return NextResponse.json({ sucesso: true, mensagem: 'Fila vazia. Nenhum e-mail pendente no momento exato.' })
     }
 
-    const transporter = nodemailer.createTransport({
+    // =================================================================
+    // 3. BUSCA AS CONFIGURAÇÕES (BANCO DE DADOS + BACKUP DA VERCEL)
+    // =================================================================
+    // maybeSingle() evita erros caso a tabela ainda esteja vazia
+    const { data: config } = await supabase.from('configuracoes').select('*').eq('id', 1).maybeSingle()
+
+    // Lógica Híbrida: Tenta o Banco de Dados PRIMEIRO. Se não tiver, usa a VERCEL.
+    const gmailEmail = config?.gmail_email || process.env.GMAIL_EMAIL;
+    const gmailSenha = config?.gmail_senha || process.env.GMAIL_SENHA;
+    
+    const smtpHost = config?.smtp_host || process.env.SMTP_HOST;
+    const smtpPort = config?.smtp_port || process.env.SMTP_PORT || '465';
+    const smtpUser = config?.smtp_user || process.env.SMTP_USER;
+    const smtpPass = config?.smtp_pass || process.env.SMTP_PASS;
+
+    // Transporter 1: GMAIL
+    const transporterGmail = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_EMAIL,
-        pass: process.env.GMAIL_SENHA
+        user: gmailEmail,
+        pass: gmailSenha
+      }
+    });
+
+    // Transporter 2: SMTP EXTERNO
+    const transporterExterno = nodemailer.createTransport({
+      host: smtpHost,
+      port: Number(smtpPort),
+      secure: Number(smtpPort) === 465, // True para porta 465, False para 587
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
       }
     });
 
@@ -46,7 +73,7 @@ export async function GET(request: Request) {
     const idsParaAtualizarSucesso: string[] = [];
     const idsParaAtualizarErro: string[] = [];
 
-    // 3. PROCESSAMENTO E DISPARO
+    // 4. PROCESSAMENTO E DISPARO
     for (const item of fila) {
       try {
         const destinatario = item.email || item.email_destino; 
@@ -102,8 +129,14 @@ export async function GET(request: Request) {
           </div>
         `;
 
-        await transporter.sendMail({
-          from: `"Equipe Vitrine" <${process.env.GMAIL_EMAIL}>`,
+        // =================================================================
+        // ESCOLHE O MOTOR CERTO BASEADO NO QUE FOI SALVO NA FILA
+        // =================================================================
+        const remetente = item.provedor === 'externo' ? smtpUser : gmailEmail;
+        const motorDeEnvio = item.provedor === 'externo' ? transporterExterno : transporterGmail;
+
+        await motorDeEnvio.sendMail({
+          from: `"Equipe Vitrine" <${remetente}>`,
           to: destinatario,
           subject: assuntoEmail,
           html: htmlMensagem
@@ -117,7 +150,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. ATUALIZAÇÃO DE STATUS NO BANCO
+    // 5. ATUALIZAÇÃO DE STATUS NO BANCO
     if (idsParaAtualizarSucesso.length > 0) {
       await supabase
         .from('fila_envios')
