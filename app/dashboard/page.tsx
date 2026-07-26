@@ -29,6 +29,9 @@ export default function ClienteDashboard() {
   
   const [telaAtiva, setTelaAtiva] = useState<'lista' | 'editar' | 'novo'>('lista')
   const [anuncioEmEdicao, setAnuncioEmEdicao] = useState<Partial<MeuAnuncio>>({})
+  
+  // Estado para dar feedback visual de que o link foi copiado
+  const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null)
 
   useEffect(() => {
     verificarSessao()
@@ -54,6 +57,21 @@ export default function ClienteDashboard() {
       
     if (data) setAnuncios(data)
     setCarregando(false)
+  }
+
+  // ==========================================
+  // FUNÇÃO DE COPIAR O LINK ENCURTADO
+  // ==========================================
+  const copiarLinkDeDivulgacao = (id: string) => {
+    // Monta o link para a página exclusiva que vamos criar
+    const urlEncurtada = `${window.location.origin}/p/${id}`
+    
+    // Copia para a área de transferência do dispositivo do cliente
+    navigator.clipboard.writeText(urlEncurtada).then(() => {
+      setLinkCopiadoId(id)
+      // Remove o aviso de "Copiado" após 3 segundos
+      setTimeout(() => setLinkCopiadoId(null), 3000) 
+    })
   }
 
   const handleUploadCapa = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,7 +197,7 @@ export default function ClienteDashboard() {
         )}
 
         {telaAtiva === 'lista' && anuncios.map(anuncio => (
-            <div key={anuncio.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div key={anuncio.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition-shadow">
                 <div>
                   <h2 className="font-bold text-xl text-slate-900 mb-1 flex items-center flex-wrap gap-2">
                     {anuncio.titulo_ebook || 'Produto sem título'}
@@ -192,15 +210,26 @@ export default function ClienteDashboard() {
                       {anuncio.status || 'Pendente'}
                     </span>
                   </h2>
-                  <p className="text-sm text-slate-500">Site/Link: {anuncio.link_site || 'Não cadastrado'}</p>
+                  <p className="text-sm text-slate-500">Site/Link: <a href={anuncio.link_site} target="_blank" className="text-blue-500 hover:underline">{anuncio.link_site || 'Não cadastrado'}</a></p>
                 </div>
                 
-                <button 
-                  onClick={() => { setAnuncioEmEdicao(anuncio); setTelaAtiva('editar') }} 
-                  className="bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors shrink-0"
-                >
-                  ✏️ Editar Oferta
-                </button>
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                  
+                  {/* NOVO BOTÃO: COPIAR LINK CURTO */}
+                  <button 
+                    onClick={() => copiarLinkDeDivulgacao(anuncio.id)} 
+                    className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 flex-1 md:flex-none justify-center ${linkCopiadoId === anuncio.id ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}`}
+                  >
+                    {linkCopiadoId === anuncio.id ? '✅ Link Copiado!' : '🔗 Link Divulgação'}
+                  </button>
+
+                  <button 
+                    onClick={() => { setAnuncioEmEdicao(anuncio); setTelaAtiva('editar') }} 
+                    className="bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors shrink-0 flex-1 md:flex-none"
+                  >
+                    ✏️ Editar Oferta
+                  </button>
+                </div>
             </div>
         ))}
 
