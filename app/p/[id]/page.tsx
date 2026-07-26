@@ -1,20 +1,34 @@
-import { supabase } from '@/lib/supabase'
-import { Metadata, ResolvingMetadata } from 'next'
+import { Metadata } from 'next'
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 
-// 1. ISSO É O QUE GERA A IMAGEM NO WHATSAPP (Open Graph)
-export async function generateMetadata({ params }: { params: { id: string } }, parent: ResolvingMetadata): Promise<Metadata> {
-  // Verifica se é um ID gigante (antigo) ou um Link Curto (novo)
-  const isUuid = params.id.length > 10;
-  
-  let query = supabase.from('profiles').select('*');
-  if (isUuid) {
-    query = query.eq('id', params.id);
-  } else {
-    query = query.eq('link_curto', params.id);
+// =====================================================================
+// 1. CLIENTE SUPABASE SEGURO PARA O SERVIDOR (Evita o Erro 500)
+// =====================================================================
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+const supabaseServer = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false // Isso desativa o localStorage e impede a página de quebrar
   }
+});
 
-  const { data: anuncio } = await query.single();
+// =====================================================================
+// 2. ISSO É O QUE GERA A IMAGEM NO WHATSAPP (Open Graph)
+// =====================================================================
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const id = params.id;
+  
+  // Identifica se é UUID gigante (tem hífen) ou Link Curto (não tem hífen)
+  const isUuid = id.includes('-');
+  const colunaBusca = isUuid ? 'id' : 'link_curto';
+  
+  const { data: anuncio } = await supabaseServer
+    .from('profiles')
+    .select('*')
+    .eq(colunaBusca, id)
+    .single();
   
   if (!anuncio) return { title: 'Anúncio não encontrado' }
 
@@ -36,26 +50,26 @@ export async function generateMetadata({ params }: { params: { id: string } }, p
   }
 }
 
-// 2. O VISUAL DA PÁGINA QUANDO ALGUÉM CLICA NO LINK
+// =====================================================================
+// 3. O VISUAL DA PÁGINA QUANDO ALGUÉM CLICA NO LINK
+// =====================================================================
 export default async function PaginaDoProduto({ params }: { params: { id: string } }) {
-  // Faz a mesma verificação inteligente aqui para carregar a página
-  const isUuid = params.id.length > 10;
-  
-  let query = supabase.from('profiles').select('*');
-  if (isUuid) {
-    query = query.eq('id', params.id);
-  } else {
-    query = query.eq('link_curto', params.id);
+  const id = params.id;
+  const isUuid = id.includes('-');
+  const colunaBusca = isUuid ? 'id' : 'link_curto';
+
+  const { data: anuncio, error } = await supabaseServer
+    .from('profiles')
+    .select('*')
+    .eq(colunaBusca, id)
+    .single();
+
+  if (error || !anuncio) {
+    console.error("Erro ao carregar o anúncio:", error);
+    redirect('/'); // Se não achar ou der erro, manda pra home silenciosamente
   }
 
-  const { data: anuncio } = await query.single();
-
-  if (!anuncio) {
-    redirect('/') // Se o ID ou link curto não existir, manda pra home
-  }
-
-  // Verifica se o anúncio está ativo (opcional, se quiser bloquear inativos)
-  const estaAtivo = anuncio.status === 'ativo'
+  const estaAtivo = anuncio.status === 'ativo';
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-12">
