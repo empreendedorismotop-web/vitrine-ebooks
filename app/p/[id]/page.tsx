@@ -1,20 +1,31 @@
 import { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
 
 // =====================================================================
-// 1. ISSO É O QUE GERA A IMAGEM NO WHATSAPP (Open Graph)
+// 1. CONEXÃO SEGURA PARA O SERVIDOR DA VERCEL (Evita o Erro 500)
+// =====================================================================
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+const supabaseServer = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false // Desativa o localStorage no servidor para não quebrar a página
+  }
+});
+
+// =====================================================================
+// 2. GERA AS TAGS DA IMAGEM PARA O WHATSAPP LER
 // =====================================================================
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const id = params.id;
-  
   if (!id) return { title: 'Vitrine Oficial' };
 
-  // Identifica automaticamente se é um UUID gigante (antigo) ou um Link Curto (novo)
+  // Identifica se o link na barra é o código de 6 letras ou o ID original
   const isUuid = id.includes('-');
   const colunaBusca = isUuid ? 'id' : 'link_curto';
   
-  const { data: anuncio } = await supabase
+  const { data: anuncio } = await supabaseServer
     .from('profiles')
     .select('*')
     .eq(colunaBusca, id)
@@ -23,8 +34,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   if (!anuncio) return { title: 'Anúncio não encontrado' }
 
   return {
-    title: anuncio.titulo_ebook || 'Conheça este material!',
-    description: anuncio.descricao || 'Clique para saber mais detalhes sobre este e-book/curso.',
+    title: anuncio.titulo_ebook || 'Vitrine de E-books',
+    description: anuncio.descricao || 'Clique para acessar este material na Vitrine Oficial.',
     openGraph: {
       title: anuncio.titulo_ebook,
       description: anuncio.descricao,
@@ -33,95 +44,54 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     },
     twitter: {
       card: 'summary_large_image',
-      title: anuncio.titulo_ebook,
-      description: anuncio.descricao,
       images: anuncio.imagem_url ? [anuncio.imagem_url] : [],
     }
   }
 }
 
 // =====================================================================
-// 2. O VISUAL DA PÁGINA QUANDO ALGUÉM CLICA NO LINK
+// 3. A "PONTE" INVISÍVEL QUE REDIRECIONA PARA A SUA ROTA /ebook/[ID]
 // =====================================================================
-export default async function PaginaDoProduto({ params }: { params: { id: string } }) {
+export default async function RedirecionadorCurto({ params }: { params: { id: string } }) {
   const id = params.id;
 
   if (!id) {
-    redirect('/'); // Se não tiver ID nenhum na URL, manda pra home
+    redirect('/');
   }
 
   const isUuid = id.includes('-');
   const colunaBusca = isUuid ? 'id' : 'link_curto';
 
-  const { data: anuncio, error } = await supabase
+  // Puxamos apenas as informações necessárias para validar a trava de segurança
+  const { data: anuncio, error } = await supabaseServer
     .from('profiles')
-    .select('*')
+    .select('id, status') 
     .eq(colunaBusca, id)
     .single();
 
-  // Se o link não existir no banco ou houver erro de digitação, redireciona o cliente em vez de quebrar a página
-  if (error || !anuncio) {
-    redirect('/');
+  // ⚠️ TRAVA DE SEGURANÇA E REDIRECIONAMENTO DE FALHA
+  // Se o link for inválido, der erro, ou se o status NÃO FOR "ativo", bloqueia e manda pra home.
+  if (error || !anuncio || anuncio.status !== 'ativo') {
+    redirect('/'); 
   }
 
-  // Verifica se o anúncio está ativo
-  const estaAtivo = anuncio.status === 'ativo';
-
+  // 🟢 REDIRECIONAMENTO PARA A ROTA OFICIAL (/ebook/ID-GIGANTE)
+  // Como precisamos que o WhatsApp consiga parar aqui e ler a imagem, 
+  // nós imprimimos um código que redireciona o cliente instantaneamente pelo navegador.
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-12">
-      <div className="max-w-4xl w-full bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] overflow-hidden flex flex-col md:flex-row border border-slate-100">
-        
-        {/* Lado da Imagem */}
-        <div className="md:w-1/2 bg-slate-50 p-8 flex items-center justify-center border-r border-slate-100 relative">
-          <div className="absolute top-4 left-4">
-            <span className="bg-blue-100 text-blue-800 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-blue-200 shadow-sm">
-              Vitrine Oficial
-            </span>
-          </div>
-          {anuncio.imagem_url ? (
-            <img src={anuncio.imagem_url} alt={anuncio.titulo_ebook} className="max-h-[450px] object-contain drop-shadow-2xl rounded" />
-          ) : (
-            <div className="text-slate-400 text-center font-bold">Sem imagem disponível</div>
-          )}
-        </div>
-
-        {/* Lado do Conteúdo */}
-        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
-          
-          <h1 className="text-3xl font-serif font-bold text-slate-900 mb-2 leading-tight">
-            {anuncio.titulo_ebook}
-          </h1>
-          
-          <p className="text-xs text-slate-400 font-bold mb-6 uppercase tracking-wider">
-            Autor(a): <span className="text-slate-600">{anuncio.nome || 'Autor Independente'}</span>
-          </p>
-
-          <div className="text-slate-600 mb-10 whitespace-pre-wrap leading-relaxed text-sm">
-            {anuncio.descricao}
-          </div>
-
-          {!estaAtivo ? (
-            <div className="bg-red-50 text-red-700 p-4 rounded-xl text-center font-bold border border-red-200 mt-auto">
-              ⚠️ Este material está temporariamente indisponível.
-            </div>
-          ) : (
-            <div className="mt-auto space-y-3">
-              <a 
-                href={anuncio.link_site} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="block w-full text-center bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg py-4 rounded-xl shadow-[0_5px_15px_rgba(5,150,105,0.3)] transition-all transform hover:scale-[1.02]"
-              >
-                Garantir Meu Acesso
-              </a>
-              <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-wider">
-                Você será direcionado ao site seguro do produtor
-              </p>
-            </div>
-          )}
-
-        </div>
+    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', fontFamily: 'sans-serif', color: '#64748b' }}>
+      
+      {/* Comandos de redirecionamento automático */}
+      <meta httpEquiv="refresh" content={`0;url=/ebook/${anuncio.id}`} />
+      <script dangerouslySetInnerHTML={{ __html: `window.location.replace("/ebook/${anuncio.id}");` }} />
+      
+      {/* Mensagem visual rápida caso a internet do cliente seja lenta */}
+      <div style={{ textAlign: 'center' }}>
+         <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px auto' }}></div>
+         <p style={{ fontWeight: 'bold' }}>Direcionando para a Vitrine Oficial...</p>
+         <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }` }} />
       </div>
+
     </div>
   )
 }
