@@ -13,15 +13,29 @@ const supabaseServer = createClient(supabaseUrl, supabaseKey, {
 });
 
 // =====================================================================
+// FUNÇÃO BLINDADA: Pega o código independente do nome da pasta
+// =====================================================================
+async function obterCodigo(paramsRecebidos: any): Promise<string> {
+  if (!paramsRecebidos) return '';
+  
+  // Aguarda os parâmetros (Prevenção contra o novo padrão do Next.js 15)
+  const params = await Promise.resolve(paramsRecebidos);
+  
+  // Puxa o 'id', o 'slug' ou simplesmente o primeiro valor que vier na URL
+  const valor = params?.id || params?.slug || Object.values(params)[0];
+  
+  // Se for um array (rotas do tipo [...slug]), pega o primeiro item
+  return Array.isArray(valor) ? valor[0] : (valor || '');
+}
+
+// =====================================================================
 // 2. GERA AS TAGS DA IMAGEM PARA O WHATSAPP/FACEBOOK LER
 // =====================================================================
-// Usando 'any' no params para aceitar a pasta independente do nome
 export async function generateMetadata({ params }: { params: any }): Promise<Metadata> {
-  const codigoParams = params?.id || params?.slug;
+  const codigoParams = await obterCodigo(params);
   
   if (!codigoParams) return { title: 'Vitrine Oficial' };
 
-  // Identifica se o link na barra é o código de 6 letras ou o ID gigante
   const isUuid = codigoParams.includes('-');
   const colunaBusca = isUuid ? 'id' : 'link_curto';
   
@@ -53,11 +67,15 @@ export async function generateMetadata({ params }: { params: any }): Promise<Met
 // 3. A "PONTE" QUE REDIRECIONA PARA A SUA ROTA /ebook/[ID]
 // =====================================================================
 export default async function RedirecionadorCurto({ params }: { params: any }) {
-  // Pega a variável dinamicamente para evitar o erro "Link em branco"
-  const codigoParams = params?.id || params?.slug;
+  const codigoParams = await obterCodigo(params);
 
+  // Se por acaso ainda falhar, agora ele mostra na tela exatamente o que deu erro para podermos arrumar
   if (!codigoParams) {
-    return <div style={{textAlign: 'center', padding: '50px', fontFamily: 'sans-serif'}}>Link em branco. Verifique a URL.</div>;
+    return (
+      <div style={{textAlign: 'center', padding: '50px', fontFamily: 'sans-serif'}}>
+        <h2>Link inválido ou não detectado.</h2>
+      </div>
+    );
   }
 
   const isUuid = codigoParams.includes('-');
