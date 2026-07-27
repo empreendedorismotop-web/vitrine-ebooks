@@ -13,11 +13,12 @@ const PLANOS_PADRAO = [
   { id: 'padrao_12_meses', nome: '12 Meses', valor: 'R$ 179,90', detalhe: 'R$ 14,99 / mes - Maior desconto' }
 ]
 
+// Valores ajustados para testar uma melhor taxa de conversao
 const PLANOS_VIP = [
-  { id: 'vip_1_mes', nome: '1 Mes VIP', valor: 'R$ 49,90', detalhe: 'Carrossel + Vitrine' },
-  { id: 'vip_3_meses', nome: '3 Meses VIP', valor: 'R$ 129,90', detalhe: 'R$ 43,30 / mes' },
-  { id: 'vip_6_meses', nome: '6 Meses VIP', valor: 'R$ 239,90', detalhe: 'R$ 39,98 / mes', destaque: true },
-  { id: 'vip_12_meses', nome: '12 Meses VIP', valor: 'R$ 399,90', detalhe: 'R$ 33,32 / mes - Dominancia Total' }
+  { id: 'vip_1_mes', nome: '1 Mes VIP', valor: 'R$ 39,90', detalhe: 'Carrossel + Vitrine' },
+  { id: 'vip_3_meses', nome: '3 Meses VIP', valor: 'R$ 99,90', detalhe: 'R$ 33,30 / mes' },
+  { id: 'vip_6_meses', nome: '6 Meses VIP', valor: 'R$ 179,90', detalhe: 'R$ 29,98 / mes', destaque: true },
+  { id: 'vip_12_meses', nome: '12 Meses VIP', valor: 'R$ 299,90', detalhe: 'R$ 24,99 / mes - Dominancia Total' }
 ]
 
 export default function PlanosPage() {
@@ -26,10 +27,8 @@ export default function PlanosPage() {
   const [anuncioId, setAnuncioId] = useState<string | null>(null)
   const [tituloOferta, setTituloOferta] = useState('')
   
-  // Controle de Abas e Selecao
-  const [tipoPlano, setTipoPlano] = useState<'padrao' | 'vip'>('padrao')
-  const [planoPadraoSelecionado, setPlanoPadraoSelecionado] = useState('padrao_6_meses')
-  const [planoVipSelecionado, setPlanoVipSelecionado] = useState('vip_6_meses')
+  // Controle Unificado de Selecao
+  const [planoSelecionado, setPlanoSelecionado] = useState('padrao_6_meses')
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -66,144 +65,159 @@ export default function PlanosPage() {
       return
     }
 
-    // Identifica o plano final escolhido com base na aba ativa
-    const planoFinalId = tipoPlano === 'padrao' ? planoPadraoSelecionado : planoVipSelecionado
-    const listaCorreta = tipoPlano === 'padrao' ? PLANOS_PADRAO : PLANOS_VIP
-    const planoEscolhido = listaCorreta.find(p => p.id === planoFinalId)
+    // Identifica o plano escolhido buscando nas duas listas
+    const planoEscolhido = PLANOS_PADRAO.find(p => p.id === planoSelecionado) || PLANOS_VIP.find(p => p.id === planoSelecionado)
+    const isVip = PLANOS_VIP.some(p => p.id === planoSelecionado)
 
     // Atualiza no banco
     await supabase
       .from('profiles')
-      .update({ plano_selecionado: planoFinalId })
+      .update({ plano_selecionado: planoSelecionado })
       .eq('id', anuncioId)
     
     // Texto Dinamico para o WhatsApp
     const SEU_NUMERO_WHATSAPP = "5561982096982"
-    const tipoTexto = tipoPlano === 'vip' ? "👑 PLANO VIP PREMIUM" : "📦 PLANO PADRAO"
+    const tipoTexto = isVip ? "👑 PLANO VIP PREMIUM" : "📦 PLANO PADRAO"
     const textoWhats = `Ola! Acabei de cadastrar minha oferta "${tituloOferta}".\n\nEscolhi o *${tipoTexto}* de *${planoEscolhido?.nome}* no valor de *${planoEscolhido?.valor}*.\n\nComo faco o pagamento para ativar meu anuncio?`
     
     window.location.href = `https://wa.me/${SEU_NUMERO_WHATSAPP}?text=${encodeURIComponent(textoWhats)}`
   }
 
-  // Define qual lista de planos renderizar
-  const planosExibidos = tipoPlano === 'padrao' ? PLANOS_PADRAO : PLANOS_VIP
-  const valorSelecionadoAtual = tipoPlano === 'padrao' ? planoPadraoSelecionado : planoVipSelecionado
-  const setValorSelecionadoAtual = tipoPlano === 'padrao' ? setPlanoPadraoSelecionado : setPlanoVipSelecionado
-
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-4 flex justify-center items-start">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
         
-        {/* CABECALHO */}
-        <div className={`p-8 text-center transition-colors duration-500 ${tipoPlano === 'vip' ? 'bg-amber-600' : 'bg-emerald-700'}`}>
-          <h1 className="text-3xl font-serif font-bold text-white">Escolha seu Plano</h1>
-          <p className={tipoPlano === 'vip' ? 'text-amber-100' : 'text-emerald-100'}>
-            Selecione a melhor estrategia de visibilidade para o seu produto.
+        {/* CABECALHO GLOBAL */}
+        <div className="p-10 text-center bg-slate-900">
+          <h1 className="text-3xl md:text-4xl font-serif font-bold text-white mb-3">Escolha sua Estrategia</h1>
+          <p className="text-slate-300 text-lg">
+            Compare os planos abaixo e selecione a melhor visibilidade para o seu produto.
           </p>
         </div>
 
-        {/* TABS (ABAS) */}
-        <div className="flex border-b border-slate-200 bg-slate-50">
-          <button
-            onClick={() => setTipoPlano('padrao')}
-            className={`flex-1 py-4 font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all ${
-              tipoPlano === 'padrao' 
-                ? 'bg-white text-emerald-700 border-b-2 border-emerald-700' 
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            <span className="text-xl">🏪</span>
-            Anuncio Padrao
-          </button>
-          <button
-            onClick={() => setTipoPlano('vip')}
-            className={`flex-1 py-4 font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all ${
-              tipoPlano === 'vip' 
-                ? 'bg-white text-amber-600 border-b-2 border-amber-600' 
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            <span className="text-xl">👑</span>
-            Destaque VIP Premium
-          </button>
-        </div>
-
-        {/* INFORMATIVO DO TIPO DE PLANO */}
-        <div className="px-8 pt-6 pb-2">
-           {tipoPlano === 'padrao' ? (
-             <p className="text-sm text-slate-600 text-center">
-               O Plano Padrao exibe seu e-book na grade principal da nossa vitrine, organizado por ordem de chegada.
-             </p>
-           ) : (
-             <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-center">
-                <p className="text-sm font-bold text-amber-800 flex items-center justify-center gap-1 mb-1">
-                  👑 Vantagem Exclusiva
-                </p>
-                <p className="text-xs text-amber-700">
-                  O Plano VIP fixa seu anuncio no topo da pagina dentro do <strong>Carrossel de Destaques</strong>, alem de tambem aparecer na grade principal.
-                </p>
-             </div>
-           )}
-        </div>
-
-        {/* LISTA DE PLANOS */}
-        <div className="p-8 pt-4 space-y-6">
-          <div className="grid gap-4">
-            {planosExibidos.map((p) => (
-              <label 
-                key={p.id} 
-                className={`relative flex cursor-pointer items-center justify-between rounded-xl border p-5 transition-all ${
-                  valorSelecionadoAtual === p.id 
-                    ? tipoPlano === 'vip' 
-                        ? 'border-amber-500 bg-amber-50 ring-2 ring-amber-500 shadow-sm' 
-                        : 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <input 
-                    type="radio" 
-                    name={`plano_${tipoPlano}`} 
-                    value={p.id} 
-                    checked={valorSelecionadoAtual === p.id} 
-                    onChange={(e) => setValorSelecionadoAtual(e.target.value)} 
-                    className={`size-5 border-slate-300 ${tipoPlano === 'vip' ? 'text-amber-600 focus:ring-amber-600' : 'text-emerald-600 focus:ring-emerald-600'}`}
-                  />
-                  <div>
-                    <span className="block font-bold text-slate-900 text-lg">{p.nome}</span>
-                    <span className="block text-sm text-slate-500">{p.detalhe}</span>
+        {/* CONTAINER DOS PLANOS (Lado a Lado no Desktop) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:divide-x divide-y md:divide-y-0 divide-slate-100">
+          
+          {/* COLUNA: PLANO PADRAO */}
+          <div className="p-6 md:p-8 bg-white">
+            <div className="mb-6 text-center">
+               <span className="inline-block text-4xl mb-3">🏪</span>
+               <h2 className="text-2xl font-bold text-emerald-800">Anuncio Padrao</h2>
+               <p className="text-sm text-slate-500 mt-2">
+                 Seu e-book exibido na grade principal da vitrine, organizado por ordem de chegada.
+               </p>
+            </div>
+            
+            <div className="space-y-4">
+              {PLANOS_PADRAO.map((p) => (
+                <label 
+                  key={p.id} 
+                  className={`relative flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all ${
+                    planoSelecionado === p.id 
+                      ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="radio" 
+                      name="plano_selecionado" 
+                      value={p.id} 
+                      checked={planoSelecionado === p.id} 
+                      onChange={(e) => setPlanoSelecionado(e.target.value)} 
+                      className="size-5 border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                    />
+                    <div>
+                      <span className="block font-bold text-slate-900">{p.nome}</span>
+                      <span className="block text-xs text-slate-500">{p.detalhe}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <span className={`block font-black text-2xl ${tipoPlano === 'vip' ? 'text-amber-700' : 'text-emerald-700'}`}>
-                    {p.valor}
-                  </span>
-                </div>
-                {p.destaque && (
-                  <span className={`absolute -top-3 right-6 rounded-full px-3 py-1 text-xs font-bold tracking-wider text-white uppercase shadow-md ${tipoPlano === 'vip' ? 'bg-amber-600' : 'bg-blue-900'}`}>
-                    Recomendado
-                  </span>
-                )}
-              </label>
-            ))}
+                  <div className="text-right">
+                    <span className="block font-black text-xl text-emerald-700">
+                      {p.valor}
+                    </span>
+                  </div>
+                  {p.destaque && (
+                    <span className="absolute -top-3 right-4 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm bg-slate-800">
+                      Mais Popular
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
           </div>
 
-          {/* BOTAO DE FINALIZAR */}
-          <div className="pt-4 border-t border-slate-100">
+          {/* COLUNA: PLANO VIP */}
+          <div className="p-6 md:p-8 bg-amber-50/30">
+            <div className="mb-6 text-center">
+               <span className="inline-block text-4xl mb-3">👑</span>
+               <h2 className="text-2xl font-bold text-amber-700">Destaque VIP Premium</h2>
+               <p className="text-sm text-slate-600 mt-2">
+                 Seu anuncio fixado no topo da pagina dentro do <strong className="text-amber-800">Carrossel de Destaques</strong>.
+               </p>
+            </div>
+            
+            <div className="space-y-4">
+              {PLANOS_VIP.map((p) => (
+                <label 
+                  key={p.id} 
+                  className={`relative flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all ${
+                    planoSelecionado === p.id 
+                      ? 'border-amber-500 bg-amber-100 ring-2 ring-amber-500 shadow-sm' 
+                      : 'border-amber-200 bg-white hover:border-amber-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="radio" 
+                      name="plano_selecionado" 
+                      value={p.id} 
+                      checked={planoSelecionado === p.id} 
+                      onChange={(e) => setPlanoSelecionado(e.target.value)} 
+                      className="size-5 border-amber-300 text-amber-600 focus:ring-amber-600"
+                    />
+                    <div>
+                      <span className="block font-bold text-slate-900">{p.nome}</span>
+                      <span className="block text-xs text-slate-500">{p.detalhe}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="block font-black text-xl text-amber-700">
+                      {p.valor}
+                    </span>
+                  </div>
+                  {p.destaque && (
+                    <span className="absolute -top-3 right-4 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm bg-amber-600">
+                      Recomendado
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* RODAPE E BOTAO DE FINALIZAR */}
+        <div className="p-8 border-t border-slate-200 bg-slate-50">
+          <div className="max-w-lg mx-auto">
             <button 
               onClick={handleFinalizar}
               disabled={loading || !anuncioId} 
-              className={`w-full text-white p-4 rounded-xl disabled:opacity-50 transition-colors font-bold text-xl shadow-lg flex items-center justify-center gap-2 ${
-                tipoPlano === 'vip' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              className={`w-full text-white py-4 px-6 rounded-xl disabled:opacity-50 transition-all font-bold text-xl shadow-lg flex items-center justify-center gap-2 ${
+                PLANOS_VIP.some(p => p.id === planoSelecionado) 
+                  ? 'bg-amber-600 hover:bg-amber-700 hover:-translate-y-1' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-1'
               }`}
             >
-              {loading ? 'Processando...' : 'Finalizar e Ativar Plano'}
+              {loading ? 'Processando...' : 'Finalizar e Ativar Plano Escolhido'}
             </button>
             <p className="text-sm text-center text-slate-500 mt-4">
               Ao clicar, voce sera direcionado ao nosso atendimento seguro pelo WhatsApp para concluir a ativacao.
             </p>
           </div>
         </div>
+        
       </div>
     </div>
   )
