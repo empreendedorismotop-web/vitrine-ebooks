@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 
 type Props = {
   params: Promise<{ id: string }> | { id: string }
@@ -8,7 +9,6 @@ type Props = {
 
 // 1. MOTOR DE SEO E LINK PREVIEW
 export async function generateMetadata(props: Props): Promise<Metadata> {
-  // O await aqui resolve o problema de sincronia nas versões novas do Next.js
   const params = await props.params;
   
   const { data: produto } = await supabase
@@ -17,8 +17,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     .eq('id', params.id)
     .single()
 
-  if (!produto) {
-    return { title: 'Produto não encontrado | Vitrine Digital' }
+  // 🔴 TRAVA DE SEGURANÇA NO SEO: Não gera capa no WhatsApp se estiver inativo
+  if (!produto || produto.status !== 'ativo') {
+    return { title: 'Produto indisponível | Vitrine Digital' }
   }
 
   const descricaoCurta = produto.descricao ? produto.descricao.substring(0, 150) + '...' : 'Confira este material incrível na Vitrine Digital.'
@@ -56,7 +57,7 @@ export default async function ProdutoPage(props: Props) {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center flex-col gap-6 p-6 text-center">
         <h2 className="text-3xl font-bold text-slate-800">Material não encontrado.</h2>
         
-        {/* CAIXA DE DIAGNÓSTICO (Visível para te ajudar a corrigir o banco) */}
+        {/* CAIXA DE DIAGNÓSTICO */}
         <div className="bg-red-50 p-6 rounded-2xl border border-red-200 text-red-900 text-sm max-w-lg shadow-sm text-left">
           <p className="font-bold text-base mb-3 text-red-700">🔍 Radar de Erro (Painel Técnico):</p>
           <p><strong>ID Buscado:</strong> {params.id}</p>
@@ -71,6 +72,11 @@ export default async function ProdutoPage(props: Props) {
         <Link href="/" className="text-emerald-600 font-bold hover:underline mt-4">← Voltar para o início</Link>
       </div>
     )
+  }
+
+  // 🔴 TRAVA DE SEGURANÇA DA PÁGINA: Expulsa para a Home se não estiver ativo
+  if (produto.status !== 'ativo') {
+    redirect('/')
   }
 
   return (
