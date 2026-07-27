@@ -15,18 +15,20 @@ const supabaseServer = createClient(supabaseUrl, supabaseKey, {
 // =====================================================================
 // 2. GERA AS TAGS DA IMAGEM PARA O WHATSAPP/FACEBOOK LER
 // =====================================================================
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const id = params.id;
-  if (!id) return { title: 'Vitrine Oficial' };
+// Usando 'any' no params para aceitar a pasta independente do nome
+export async function generateMetadata({ params }: { params: any }): Promise<Metadata> {
+  const codigoParams = params?.id || params?.slug;
+  
+  if (!codigoParams) return { title: 'Vitrine Oficial' };
 
   // Identifica se o link na barra é o código de 6 letras ou o ID gigante
-  const isUuid = id.includes('-');
+  const isUuid = codigoParams.includes('-');
   const colunaBusca = isUuid ? 'id' : 'link_curto';
   
   const { data: anuncio } = await supabaseServer
     .from('profiles')
     .select('*')
-    .eq(colunaBusca, id)
+    .eq(colunaBusca, codigoParams)
     .single();
   
   if (!anuncio) return { title: 'Anúncio não encontrado' }
@@ -50,20 +52,21 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 // =====================================================================
 // 3. A "PONTE" QUE REDIRECIONA PARA A SUA ROTA /ebook/[ID]
 // =====================================================================
-export default async function RedirecionadorCurto({ params }: { params: { id: string } }) {
-  const id = params.id;
+export default async function RedirecionadorCurto({ params }: { params: any }) {
+  // Pega a variável dinamicamente para evitar o erro "Link em branco"
+  const codigoParams = params?.id || params?.slug;
 
-  if (!id) {
-    return <div style={{textAlign: 'center', padding: '50px'}}>Link em branco.</div>;
+  if (!codigoParams) {
+    return <div style={{textAlign: 'center', padding: '50px', fontFamily: 'sans-serif'}}>Link em branco. Verifique a URL.</div>;
   }
 
-  const isUuid = id.includes('-');
+  const isUuid = codigoParams.includes('-');
   const colunaBusca = isUuid ? 'id' : 'link_curto';
 
   const { data: anuncio, error } = await supabaseServer
     .from('profiles')
     .select('id, status') 
-    .eq(colunaBusca, id)
+    .eq(colunaBusca, codigoParams)
     .single();
 
   // 🔴 SE NÃO ACHAR O ANÚNCIO (ERRO OU DELETADO)
@@ -71,7 +74,7 @@ export default async function RedirecionadorCurto({ params }: { params: { id: st
     return (
       <div style={{ textAlign: 'center', marginTop: '50px', fontFamily: 'sans-serif', color: '#333' }}>
          <h2>⚠️ Ops! Anúncio não encontrado</h2>
-         <p>Não foi possível localizar o código <b>{id}</b>.</p>
+         <p>Não foi possível localizar o código <b>{codigoParams}</b>.</p>
       </div>
     );
   }
@@ -92,6 +95,5 @@ export default async function RedirecionadorCurto({ params }: { params: { id: st
   }
 
   // 🟢 REDIRECIONAMENTO DIRETO PARA A ROTA OFICIAL (/ebook/ID-GIGANTE)
-  // O Next.js fará o redirecionamento instantâneo pelo servidor para a página real.
   redirect(`/ebook/${anuncio.id}`);
 }

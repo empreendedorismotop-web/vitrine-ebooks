@@ -17,7 +17,7 @@ type MeuAnuncio = {
   plano_selecionado: string
   status: string
   imagem_url?: string
-  link_curto?: string // O novo campo adicionado para o encurtador
+  link_curto?: string 
   cliques?: Clique[]
 }
 
@@ -31,7 +31,6 @@ export default function ClienteDashboard() {
   const [telaAtiva, setTelaAtiva] = useState<'lista' | 'editar' | 'novo'>('lista')
   const [anuncioEmEdicao, setAnuncioEmEdicao] = useState<Partial<MeuAnuncio>>({})
   
-  // Estado para dar feedback visual de que o link foi copiado
   const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -56,24 +55,44 @@ export default function ClienteDashboard() {
       .eq('email', email)
       .order('created_at', { ascending: false })
       
-    if (data) setAnuncios(data)
+    if (data) {
+      // AUTO-ENCURTADOR: Garante que anúncios velhos ganhem link curto na hora
+      const anunciosProcessados = await Promise.all(
+        data.map(async (anuncio) => {
+          if (!anuncio.link_curto || anuncio.link_curto.trim() === '') {
+            const novoCodigoCurto = Math.random().toString(36).substring(2, 8)
+            await supabase.from('profiles').update({ link_curto: novoCodigoCurto }).eq('id', anuncio.id)
+            return { ...anuncio, link_curto: novoCodigoCurto }
+          }
+          return anuncio
+        })
+      )
+      setAnuncios(anunciosProcessados)
+    }
     setCarregando(false)
   }
 
   // ==========================================
-  // FUNÇÃO DE COPIAR O LINK ENCURTADO
+  // FUNÇÃO DE EXCLUIR ANÚNCIO
   // ==========================================
+  const excluirAnuncio = async (id: string) => {
+    if (confirm('🚨 Tem certeza que deseja excluir esta oferta permanentemente? Essa ação não pode ser desfeita.')) {
+      const { error } = await supabase.from('profiles').delete().eq('id', id)
+      if (error) {
+        alert('Erro ao excluir anúncio: ' + error.message)
+      } else {
+        alert('✅ Anúncio excluído com sucesso!')
+        if (usuarioLogado) buscarMeusAnuncios(usuarioLogado)
+      }
+    }
+  }
+
   const copiarLinkDeDivulgacao = (anuncio: MeuAnuncio) => {
-    // Se não tiver link_curto ainda (anúncios antigos), usa o ID
     const codigoParaLink = anuncio.link_curto || anuncio.id
-    
-    // Monta o link para a página exclusiva que vamos criar
     const urlEncurtada = `${window.location.origin}/p/${codigoParaLink}`
     
-    // Copia para a área de transferência do dispositivo do cliente
     navigator.clipboard.writeText(urlEncurtada).then(() => {
       setLinkCopiadoId(anuncio.id)
-      // Remove o aviso de "Copiado" após 3 segundos
       setTimeout(() => setLinkCopiadoId(null), 3000) 
     })
   }
@@ -131,8 +150,6 @@ export default function ClienteDashboard() {
     } 
     
     else if (telaAtiva === 'novo') {
-      
-      // GERA O CÓDIGO CURTO DE 6 CARACTERES
       const codigoCurtoGerado = Math.random().toString(36).substring(2, 8)
 
       const { error } = await supabase.from('profiles').insert([{
@@ -144,7 +161,7 @@ export default function ClienteDashboard() {
           descricao: anuncioEmEdicao.descricao,
           titulo_ebook: anuncioEmEdicao.titulo_ebook,
           imagem_url: anuncioEmEdicao.imagem_url,
-          link_curto: codigoCurtoGerado, // SALVA O CÓDIGO NO BANCO
+          link_curto: codigoCurtoGerado, 
           plano_selecionado: 'Pendente',
           status: 'pendente' 
         }])
@@ -206,39 +223,73 @@ export default function ClienteDashboard() {
         )}
 
         {telaAtiva === 'lista' && anuncios.map(anuncio => (
-            <div key={anuncio.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:shadow-md transition-shadow">
-                <div>
-                  <h2 className="font-bold text-xl text-slate-900 mb-1 flex items-center flex-wrap gap-2">
-                    {anuncio.titulo_ebook || 'Produto sem título'}
-                    
-                    <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-md tracking-wide border ${
-                      anuncio.status?.toLowerCase() === 'ativo' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                      anuncio.status?.toLowerCase() === 'pendente' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                      'bg-red-50 text-red-700 border-red-200'
-                    }`}>
-                      {anuncio.status || 'Pendente'}
-                    </span>
-                  </h2>
-                  <p className="text-sm text-slate-500">Site/Link: <a href={anuncio.link_site} target="_blank" className="text-blue-500 hover:underline">{anuncio.link_site || 'Não cadastrado'}</a></p>
-                </div>
+            <div key={anuncio.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-4 flex flex-col hover:shadow-md transition-shadow">
                 
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h2 className="font-bold text-xl text-slate-900 mb-1 flex items-center flex-wrap gap-2">
+                      {anuncio.titulo_ebook || 'Produto sem título'}
+                      
+                      <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-md tracking-wide border ${
+                        anuncio.status?.toLowerCase() === 'ativo' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                        anuncio.status?.toLowerCase() === 'pendente' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                        'bg-red-50 text-red-700 border-red-200'
+                      }`}>
+                        {anuncio.status || 'Pendente'}
+                      </span>
+                    </h2>
+                    <p className="text-sm text-slate-500">Site/Link: <a href={anuncio.link_site} target="_blank" className="text-blue-500 hover:underline">{anuncio.link_site || 'Não cadastrado'}</a></p>
+                    
+                    {anuncio.link_curto && (
+                      <p className="text-sm font-mono text-emerald-600 mt-2 bg-emerald-50 inline-block px-2 py-1 rounded">
+                        Link Curto: /p/{anuncio.link_curto}
+                      </p>
+                    )}
+                  </div>
                   
-                  {/* NOVO BOTÃO: COPIAR LINK CURTO */}
-                  <button 
-                    onClick={() => copiarLinkDeDivulgacao(anuncio)} 
-                    className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 flex-1 md:flex-none justify-center ${linkCopiadoId === anuncio.id ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}`}
-                  >
-                    {linkCopiadoId === anuncio.id ? '✅ Link Copiado!' : '🔗 Copiar Link de Divulgação'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                    <button 
+                      onClick={() => copiarLinkDeDivulgacao(anuncio)} 
+                      className={`px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-2 flex-1 md:flex-none justify-center ${linkCopiadoId === anuncio.id ? 'bg-emerald-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}`}
+                    >
+                      {linkCopiadoId === anuncio.id ? '✅ Link Copiado!' : '🔗 Copiar Link de Divulgação'}
+                    </button>
 
-                  <button 
-                    onClick={() => { setAnuncioEmEdicao(anuncio); setTelaAtiva('editar') }} 
-                    className="bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors shrink-0 flex-1 md:flex-none"
-                  >
-                    ✏️ Editar Oferta
-                  </button>
+                    <button 
+                      onClick={() => { setAnuncioEmEdicao(anuncio); setTelaAtiva('editar') }} 
+                      className="bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors shrink-0 flex-1 md:flex-none"
+                    >
+                      ✏️ Editar
+                    </button>
+
+                    {/* BOTÃO EXCLUIR */}
+                    <button 
+                      onClick={() => excluirAnuncio(anuncio.id)} 
+                      className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors shrink-0 flex-1 md:flex-none"
+                    >
+                      🗑️ Excluir
+                    </button>
+                  </div>
                 </div>
+
+                {/* ESTATÍSTICAS DE CLIQUES E ORIGENS */}
+                <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-4">
+                  <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm">
+                    🖱️ {anuncio.cliques?.length || 0} Cliques Totais
+                  </div>
+                  
+                  {anuncio.cliques && anuncio.cliques.length > 0 && (
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <span className="text-xs text-slate-500 font-bold uppercase">Origem dos cliques:</span>
+                      {Array.from(new Set(anuncio.cliques.map(c => c.origem))).map(origem => (
+                        <span key={origem} className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-200 shadow-sm capitalize">
+                          {origem}: {anuncio.cliques!.filter(c => c.origem === origem).length}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
             </div>
         ))}
 
@@ -281,7 +332,6 @@ export default function ClienteDashboard() {
                     <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
                         <label className="block text-sm font-medium text-slate-900 mb-2">Capa do Material *</label>
                         
-                        {/* A TRAVA INTELIGENTE FICA NESTA LINHA ABAIXO (required) */}
                         <input 
                           type="file" 
                           accept="image/*"
