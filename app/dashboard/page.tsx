@@ -330,7 +330,9 @@ export default function ClienteDashboard() {
                     </div>
                     
                     <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
-                        <label className="block text-sm font-medium text-slate-900 mb-2">Capa do Material *</label>
+                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                          Capa do Material * <span className="text-xs text-slate-500 font-normal">(Recomendado: 1000x1500px na vertical)</span>
+                        </label>
                         
                         <input 
                           type="file" 

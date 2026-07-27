@@ -121,11 +121,12 @@ export default function HomePage() {
                               <Star className="size-3 fill-amber-950" /> DESTAQUE
                            </div>
                            
-                           <div className="h-[280px] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center p-6">
+                           {/* TRAVA GEOMÉTRICA DE IMAGEM APLICADA AQUI */}
+                           <div className="w-full aspect-[2/3] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center overflow-hidden relative">
                              <img 
                                 src={vip.imagem_url || '/placeholder-book.png'} 
                                 alt={vip.titulo_ebook} 
-                                className="h-full w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform duration-500" 
+                                className="w-full h-full object-cover object-center hover:scale-105 transition-transform duration-500" 
                              />
                            </div>
                            
