@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 // =====================================================================
@@ -65,40 +66,32 @@ export default async function RedirecionadorCurto({ params }: { params: { id: st
     .eq(colunaBusca, id)
     .single();
 
-  // 🔴 AGORA MOSTRA O ERRO NA TELA EM VEZ DE TE JOGAR PRA HOME
+  // 🔴 SE NÃO ACHAR O ANÚNCIO (ERRO OU DELETADO)
   if (error || !anuncio) {
     return (
       <div style={{ textAlign: 'center', marginTop: '50px', fontFamily: 'sans-serif', color: '#333' }}>
          <h2>⚠️ Ops! Anúncio não encontrado</h2>
          <p>Não foi possível localizar o código <b>{id}</b>.</p>
-         {error && <p style={{color: 'red', fontSize: '12px', marginTop: '20px'}}>{error.message}</p>}
+      </div>
+    );
+  }
+
+  // 🟡 TRAVA DE SEGURANÇA (O STATUS DEVE SER ATIVO)
+  if (anuncio.status !== 'ativo') {
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', fontFamily: 'sans-serif' }}>
+        <div style={{ textAlign: 'center', padding: '40px', backgroundColor: '#fff', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', maxWidth: '400px' }}>
+           <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>⏳</span>
+           <h2 style={{ color: '#0f172a', marginBottom: '10px' }}>Anúncio Pendente ou Inativo</h2>
+           <p style={{ color: '#64748b', fontSize: '15px' }}>
+             Este anúncio ainda não foi ativado na plataforma. Assim que você ativá-lo, este link levará automaticamente para a página do produto.
+           </p>
+        </div>
       </div>
     );
   }
 
   // 🟢 REDIRECIONAMENTO DIRETO PARA A ROTA OFICIAL (/ebook/ID-GIGANTE)
-  // Sem travas de status aqui. Apenas joga o cliente para a página real do e-book.
-  const urlDestino = `/ebook/${anuncio.id}`;
-
-  return (
-    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', fontFamily: 'sans-serif', color: '#64748b' }}>
-      
-      {/* Comandos de redirecionamento automático */}
-      <meta httpEquiv="refresh" content={`0;url=${urlDestino}`} />
-      <script dangerouslySetInnerHTML={{ __html: `window.location.replace("${urlDestino}");` }} />
-      
-      {/* Feedback visual rápido para o cliente */}
-      <div style={{ textAlign: 'center' }}>
-         <div style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px auto' }}></div>
-         <p style={{ fontWeight: 'bold' }}>Direcionando para o anúncio...</p>
-         <p style={{ fontSize: '12px', marginTop: '15px' }}>
-           <a href={urlDestino} style={{ color: '#059669', textDecoration: 'underline' }}>
-             Clique aqui se não for redirecionado automaticamente
-           </a>
-         </p>
-         <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }` }} />
-      </div>
-
-    </div>
-  )
+  // O Next.js fará o redirecionamento instantâneo pelo servidor para a página real.
+  redirect(`/ebook/${anuncio.id}`);
 }
