@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TherapistCard } from './therapist-card'
 
-const ITEMS_POR_PAGINA = 15 
+const ITEMS_POR_PAGINA = 15 // Ajustado para fechar 3 linhas completas de 5 colunas
 
 export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
   const [ebooks, setEbooks] = useState<any[]>([])
@@ -16,6 +16,7 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
   }, [])
 
   const carregarEbooks = async () => {
+    // Busca e ordena os e-books mais recentes primeiro
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -28,6 +29,7 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
       return
     }
 
+    // A MÁGICA ACONTECE AQUI: Oculta automaticamente quem passou do prazo
     const hoje = new Date().getTime() 
     
     const filtrados = data.filter((t: any) => {
@@ -43,6 +45,7 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
 
   if (loading) return <p className="text-center py-20 text-primary animate-pulse font-medium">Carregando vitrine...</p>
 
+  // Filtra buscando tanto pelo Nome do Autor quanto pelo Título do E-book
   const ebooksExibidos = ebooks.filter((t) => {
     const termoBusca = searchQuery.toLowerCase();
     const nomeAutor = t.nome?.toLowerCase() || '';
@@ -51,6 +54,7 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
     return nomeAutor.includes(termoBusca) || tituloEbook.includes(termoBusca);
   })
 
+  // Lógica de Paginação
   const totalPaginas = Math.ceil(ebooksExibidos.length / ITEMS_POR_PAGINA)
   const inicioIndex = (paginaAtual - 1) * ITEMS_POR_PAGINA
   const ebooksPaginados = ebooksExibidos.slice(inicioIndex, inicioIndex + ITEMS_POR_PAGINA)
@@ -59,12 +63,10 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
     <section className="mx-auto max-w-[1400px] px-4 py-12">
       {ebooksExibidos.length > 0 ? (
         <>
+          {/* Grid responsivo: 2 no Mobile, 3 no Tablet, 4 no Laptop, 5 no Desktop largo */}
           <div className="grid gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {ebooksPaginados.map((ebook) => (
-              /* TRAVA DE PROPORÇÃO 2:3 APLICADA AQUI NO CONTAINER */
-              <div key={ebook.id} className="w-full aspect-[2/3] overflow-hidden rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                <TherapistCard therapist={ebook} />
-              </div>
+              <TherapistCard key={ebook.id} therapist={ebook} />
             ))}
           </div>
 
