@@ -1,27 +1,39 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TherapistCard } from './therapist-card'
+import { ChevronRight, ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
 
-const ITEMS_POR_PAGINA = 15 // Ajustado para fechar 3 linhas completas de 5 colunas
+// Mostra 20 por vez (4 fileiras de 5 no PC, ou 20 no carrossel do celular)
+const ITEMS_POR_CARREGAMENTO = 20 
 
 export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
-  const [ebooks, setEbooks] = useState<any[]>([])
+  const [todosEbooks, setTodosEbooks] = useState<any[]>([])
+  const [ebooksVisiveis, setEbooksVisiveis] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [paginaAtual, setPaginaAtual] = useState(1)
+  const [carregandoMais, setCarregandoMais] = useState(false)
+  const [paginaExibida, setPaginaExibida] = useState(1)
+
+  const carrosselRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     carregarEbooks()
   }, [])
 
+  // Quando você digita algo na busca lá em cima, ele reseta para mostrar os resultados
+  useEffect(() => {
+    if (todosEbooks.length > 0) {
+      aplicarFiltroEEmbaralhamento(todosEbooks)
+    }
+  }, [searchQuery])
+
   const carregarEbooks = async () => {
-    // Busca e ordena os e-books mais recentes primeiro
+    setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('status', 'ativo')
-      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('Erro ao buscar:', error)
@@ -29,85 +41,154 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
       return
     }
 
-    // A MÁGICA ACONTECE AQUI: Oculta automaticamente quem passou do prazo
+    // Filtra e-books expirados
     const hoje = new Date().getTime() 
-    
-    const filtrados = data.filter((t: any) => {
+    const filtradosAtivos = data.filter((t: any) => {
       if (!t.data_expiracao) return true 
-      
       const dataVencimento = new Date(t.data_expiracao).getTime()
       return dataVencimento >= hoje 
     })
 
-    setEbooks(filtrados)
+    setTodosEbooks(filtradosAtivos)
+    aplicarFiltroEEmbaralhamento(filtradosAtivos)
     setLoading(false)
   }
 
-  if (loading) return <p className="text-center py-20 text-primary animate-pulse font-medium">Carregando vitrine...</p>
+  const aplicarFiltroEEmbaralhamento = (listaCompleta: any[]) => {
+    let listaParaProcessar = listaCompleta
 
-  // Filtra buscando tanto pelo Nome do Autor quanto pelo Título do E-book
-  const ebooksExibidos = ebooks.filter((t) => {
-    const termoBusca = searchQuery.toLowerCase();
-    const nomeAutor = t.nome?.toLowerCase() || '';
-    const tituloEbook = t.titulo_ebook?.toLowerCase() || '';
-    
-    return nomeAutor.includes(termoBusca) || tituloEbook.includes(termoBusca);
-  })
+    // Se a pessoa digitou algo na busca, ele NÃO embaralha, ele busca de verdade.
+    if (searchQuery.trim() !== '') {
+      const termoBusca = searchQuery.toLowerCase()
+      listaParaProcessar = listaCompleta.filter((t) => {
+        const nomeAutor = t.nome?.toLowerCase() || ''
+        const tituloEbook = t.titulo_ebook?.toLowerCase() || ''
+        return nomeAutor.includes(termoBusca) || tituloEbook.includes(termoBusca)
+      })
+    } else {
+      // O MOTOR MÁGICO: Se não tem busca, embaralha a ordem para dar chance a todos!
+      listaParaProcessar = [...listaCompleta].sort(() => Math.random() - 0.5)
+    }
 
-  // Lógica de Paginação
-  const totalPaginas = Math.ceil(ebooksExibidos.length / ITEMS_POR_PAGINA)
-  const inicioIndex = (paginaAtual - 1) * ITEMS_POR_PAGINA
-  const ebooksPaginados = ebooksExibidos.slice(inicioIndex, inicioIndex + ITEMS_POR_PAGINA)
+    setEbooksVisiveis(listaParaProcessar)
+    setPaginaExibida(1) // Reseta pra primeira "página"
+  }
+
+  // Puxa a quantidade certa baseado em quantas vezes você apertou "Carregar Mais"
+  const ebooksNaTela = ebooksVisiveis.slice(0, paginaExibida * ITEMS_POR_CARREGAMENTO)
+  const temMaisEbooks = ebooksVisiveis.length > ebooksNaTela.length
+
+  const carregarMaisEbooks = () => {
+    setCarregandoMais(true)
+    setTimeout(() => { // Pequeno delay pra dar aquele efeito bonito de carregamento
+      setPaginaExibida(prev => prev + 1)
+      setCarregandoMais(false)
+    }, 600)
+  }
+
+  const embaralharDeNovo = () => {
+    setLoading(true)
+    setTimeout(() => {
+      aplicarFiltroEEmbaralhamento(todosEbooks)
+      setLoading(false)
+    }, 500)
+  }
+
+  const rolarEsquerda = () => {
+    if (carrosselRef.current) carrosselRef.current.scrollBy({ left: -300, behavior: 'smooth' })
+  }
+
+  const rolarDireita = () => {
+    if (carrosselRef.current) carrosselRef.current.scrollBy({ left: 300, behavior: 'smooth' })
+  }
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 text-emerald-600 gap-3">
+      <Loader2 className="size-8 animate-spin" />
+      <p className="font-bold">Embaralhando as melhores opções para você...</p>
+    </div>
+  )
 
   return (
-    <section className="mx-auto max-w-[1400px] px-4 py-12">
-      {ebooksExibidos.length > 0 ? (
-        <>
-          {/* Grid responsivo: 2 no Mobile, 3 no Tablet, 4 no Laptop, 5 no Desktop largo */}
-          <div className="grid gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {ebooksPaginados.map((ebook) => (
-              <TherapistCard key={ebook.id} therapist={ebook} />
+    <section className="mx-auto max-w-[1400px] px-4 py-8 md:py-12">
+      
+      {/* Cabeçalho da Seção de Descobertas */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <h2 className="text-2xl font-serif font-bold text-slate-900">
+            {searchQuery ? 'Resultados da Busca' : 'Descubra Novos E-books'}
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            {searchQuery ? `Encontramos ${ebooksVisiveis.length} títulos para você.` : 'Seleção especial sorteada do nosso acervo.'}
+          </p>
+        </div>
+
+        {!searchQuery && (
+          <button 
+            onClick={embaralharDeNovo}
+            className="flex items-center gap-2 text-sm font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-100 shadow-sm"
+          >
+            <RefreshCw className="size-4" /> Ver outras opções
+          </button>
+        )}
+      </div>
+
+      {/* CORREÇÃO AQUI: Mudado de ebooksExibidos para ebooksVisiveis */}
+      {ebooksVisiveis.length > 0 ? (
+        <div className="relative group">
+          
+          {/* Botão de Rolar Esquerda (Só aparece no Mobile) */}
+          <button 
+            onClick={rolarEsquerda}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 z-20 bg-white border border-slate-200 text-slate-600 p-2 rounded-full shadow-lg hover:bg-slate-50 transition-all md:hidden flex items-center justify-center"
+          >
+            <ChevronLeft className="size-5" />
+          </button>
+
+          {/* O GRID HÍBRIDO (Rola pro lado no Celular, Desce normal no PC) */}
+          <div 
+            ref={carrosselRef}
+            className="flex md:grid gap-6 overflow-x-auto md:overflow-visible pb-6 snap-x snap-mandatory md:snap-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+          >
+            {ebooksNaTela.map((ebook) => (
+              <div key={ebook.id} className="snap-start shrink-0 w-[80vw] sm:w-[300px] md:w-auto">
+                <TherapistCard therapist={ebook} />
+              </div>
             ))}
           </div>
 
-          {/* Botões de Paginação */}
-          {totalPaginas > 1 && (
-            <div className="mt-12 flex justify-center gap-2">
-              <button 
-                onClick={() => setPaginaAtual(prev => Math.max(prev - 1, 1))}
-                disabled={paginaAtual === 1}
-                className="px-4 py-2 rounded-lg border border-border text-foreground disabled:opacity-50 hover:bg-muted transition"
-              >
-                Anterior
-              </button>
-              
-              {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((num) => (
-                <button
-                  key={num}
-                  onClick={() => setPaginaAtual(num)}
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
-                    paginaAtual === num 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'border border-border text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
+          {/* Botão de Rolar Direita (Só aparece no Mobile) */}
+          <button 
+            onClick={rolarDireita}
+            className="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 z-20 bg-white border border-slate-200 text-slate-600 p-2 rounded-full shadow-lg hover:bg-slate-50 transition-all md:hidden flex items-center justify-center"
+          >
+            <ChevronRight className="size-5" />
+          </button>
 
-              <button 
-                onClick={() => setPaginaAtual(prev => Math.min(prev + 1, totalPaginas))}
-                disabled={paginaAtual === totalPaginas}
-                className="px-4 py-2 rounded-lg border border-border text-foreground disabled:opacity-50 hover:bg-muted transition"
-              >
-                Próxima
-              </button>
-            </div>
-          )}
-        </>
+        </div>
       ) : (
-        <p className="text-center text-muted-foreground py-10">Nenhum e-book encontrado para esta busca.</p>
+        <div className="text-center py-20 bg-slate-50 rounded-2xl border border-slate-100">
+          <p className="text-slate-500 font-medium text-lg">Nenhum e-book encontrado para esta busca.</p>
+        </div>
       )}
+
+      {/* Botão de Carregar Mais Moderno */}
+      {temMaisEbooks && (
+        <div className="mt-8 flex justify-center">
+          <button 
+            onClick={carregarMaisEbooks}
+            disabled={carregandoMais}
+            className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md disabled:opacity-70 transition-all flex items-center gap-2"
+          >
+            {carregandoMais ? (
+              <><Loader2 className="size-5 animate-spin" /> Processando...</>
+            ) : (
+              'Carregar Mais E-books'
+            )}
+          </button>
+        </div>
+      )}
+
     </section>
   )
 }
