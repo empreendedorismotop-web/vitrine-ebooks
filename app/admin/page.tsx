@@ -835,7 +835,7 @@ export default function AdminPage() {
                           <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
                           <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none">
                             <option value="nenhuma">Padrão</option>
-                            {[...Array(12)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
+                            {[...Array(50)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
                           </select>
                         </div>
                       </div>

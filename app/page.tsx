@@ -14,22 +14,35 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [vips, setVips] = useState<any[]>([])
   
+  // NOVO: Estado para armazenar TODOS os ativos para a faixa jornalística
+  const [ativos, setAtivos] = useState<any[]>([]) 
+  
   // Referencia para controlar o carrossel VIP pelo codigo
   const carouselRef = useRef<HTMLDivElement>(null)
 
-  // Busca os anuncios VIPs no banco
+  // Busca os anuncios no banco
   useEffect(() => {
-    const carregarVips = async () => {
-      const { data } = await supabase
+    const carregarDados = async () => {
+      // 1. Busca APENAS os VIPs para o Carrossel
+      const { data: dataVips } = await supabase
         .from('profiles')
         .select('*')
         .eq('status', 'ativo')
         .not('posicao_fixa', 'is', null)
         .order('posicao_fixa', { ascending: true })
       
-      if (data) setVips(data)
+      if (dataVips) setVips(dataVips)
+
+      // 2. Busca TODOS os e-books ativos para o Letreiro (se for desativado, não aparece aqui)
+      const { data: dataAtivos } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+      
+      if (dataAtivos) setAtivos(dataAtivos)
     }
-    carregarVips()
+    carregarDados()
   }, [])
 
   // Motor de Autoplay do Carrossel VIP
@@ -96,10 +109,10 @@ export default function HomePage() {
                   </div>
                </div>
                
-               {/* WRAPPER DO CARROSSEL (Para controlar o hover das setas) */}
+               {/* WRAPPER DO CARROSSEL */}
                <div className="relative group">
                  
-                 {/* SETA ESQUERDA (Oculta no mobile, aparece no hover do desktop) */}
+                 {/* SETA ESQUERDA */}
                  <button 
                     onClick={rolarEsquerda}
                     className="absolute left-0 top-1/2 -translate-y-1/2 -ml-5 z-20 bg-white border border-amber-200 text-amber-600 p-3 rounded-full shadow-lg hover:bg-amber-50 transition-all opacity-0 group-hover:opacity-100 hidden md:flex items-center justify-center"
@@ -143,7 +156,7 @@ export default function HomePage() {
                     ))}
                  </div>
 
-                 {/* SETA DIREITA (Oculta no mobile, aparece no hover do desktop) */}
+                 {/* SETA DIREITA */}
                  <button 
                     onClick={rolarDireita}
                     className="absolute right-0 top-1/2 -translate-y-1/2 -mr-5 z-20 bg-white border border-amber-200 text-amber-600 p-3 rounded-full shadow-lg hover:bg-amber-50 transition-all opacity-0 group-hover:opacity-100 hidden md:flex items-center justify-center"
@@ -154,6 +167,57 @@ export default function HomePage() {
 
                </div>
             </section>
+        )}
+
+        {/* --- NOVA FAIXA JORNALÍSTICA (LETREIRO) --- */}
+        {ativos.length > 0 && (
+          <div className="w-full bg-slate-900 text-white overflow-hidden relative flex items-center py-3 mb-12 border-y border-slate-800">
+            <div className="absolute left-0 z-10 w-12 h-full bg-gradient-to-r from-slate-900 to-transparent pointer-events-none"></div>
+            <div className="absolute right-0 z-10 w-12 h-full bg-gradient-to-l from-slate-900 to-transparent pointer-events-none"></div>
+            
+            <style>{`
+              @keyframes letreiro {
+                0% { transform: translateX(100vw); }
+                100% { transform: translateX(-100%); }
+              }
+              .animacao-letreiro {
+                display: inline-flex;
+                white-space: nowrap;
+                animation: letreiro 40s linear infinite;
+                padding-right: 50px;
+              }
+              .animacao-letreiro:hover {
+                animation-play-state: paused;
+              }
+            `}</style>
+
+            <div className="animacao-letreiro gap-12 px-4">
+              {/* Renderiza a lista de ebooks ativos */}
+              {ativos.map((ebook) => (
+                <Link 
+                  key={ebook.id} 
+                  href={`/ebook/${ebook.id}`} 
+                  className="text-sm font-semibold hover:text-emerald-400 transition-colors flex items-center gap-2"
+                >
+                  <span className="text-emerald-500">✦</span> 
+                  {ebook.titulo_ebook} 
+                  <span className="text-slate-400 font-normal ml-1">por {ebook.nome}</span>
+                </Link>
+              ))}
+              {/* Duplicamos a lista para que a rolagem seja infinita e sem buracos em branco */}
+              {ativos.map((ebook) => (
+                <Link 
+                  key={`${ebook.id}-clone`} 
+                  href={`/ebook/${ebook.id}`} 
+                  className="text-sm font-semibold hover:text-emerald-400 transition-colors flex items-center gap-2"
+                >
+                  <span className="text-emerald-500">✦</span> 
+                  {ebook.titulo_ebook} 
+                  <span className="text-slate-400 font-normal ml-1">por {ebook.nome}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* GRADE ORIGINAL DOS PRODUTOS (Vitrine Natural) */}
