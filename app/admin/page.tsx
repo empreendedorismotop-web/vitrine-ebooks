@@ -522,7 +522,7 @@ export default function AdminPage() {
       for (let i = 0; i < lotes.length; i++) {
         for (const cliente of lotes[i]) {
           registrosFila.push({
-            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome, assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,               
+            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome, assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,                
             base_url: window.location.origin, status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -792,33 +792,40 @@ export default function AdminPage() {
               <div className="divide-y divide-slate-100">
                 {perfisFiltrados.map(perfil => (
                   <div key={perfil.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
-                    <div>
-                      <h3 className="font-bold text-slate-900">{perfil.nome}</h3>
+                    
+                    {/* 👇 O SEGREDO ESTÁ AQUI: flex-1 e min-w-0 forçam a caixa a respeitar o limite */}
+                    <div className="flex-1 min-w-0 w-full">
+                      <h3 className="font-bold text-slate-900 truncate">{perfil.nome}</h3>
                       
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-sm text-slate-600">{perfil.email}</p>
+                      {/* Envolvi tudo com flex-wrap para telas menores */}
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <p className="text-sm text-slate-600 truncate">{perfil.email}</p>
                         {perfil.telefone && (
-                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1">
+                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1 shrink-0">
                             💬 Whats
                           </a>
                         )}
-                        <span className="text-slate-300">|</span>
-                        <p className="text-sm text-slate-600">Site: {perfil.link_site || 'Não informado'}</p>
+                        <span className="text-slate-300 hidden md:inline">|</span>
+                        
+                        {/* 👇 O SEGREDO 2 ESTÁ AQUI: O truncate adiciona '...' se o site for muito grande */}
+                        <p className="text-sm text-slate-600 truncate max-w-xs md:max-w-md" title={perfil.link_site}>
+                           Site: {perfil.link_site || 'Não informado'}
+                        </p>
                       </div>
 
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm shrink-0">
                           🖱️ {perfil.cliques?.length || 0} Cliques
                         </span>
                         {perfil.cliques && perfil.cliques.length > 0 && (
-                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 max-w-[200px] truncate">
+                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 max-w-[200px] truncate shrink-0">
                             Última origem: <strong>{perfil.cliques[0].origem}</strong>
                           </span>
                         )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100">
+                        <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100 shrink-0">
                           <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
                           <input type="text" list="sugestoes-planos" value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28" />
                           <datalist id="sugestoes-planos">
@@ -826,12 +833,12 @@ export default function AdminPage() {
                           </datalist>
                         </div>
 
-                        <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100">
+                        <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100 shrink-0">
                           <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
                           <input type="date" value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''} onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none" />
                         </div>
                         
-                        <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100">
+                        <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100 shrink-0">
                           <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
                           <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none">
                             <option value="nenhuma">Padrão</option>
@@ -841,25 +848,31 @@ export default function AdminPage() {
                       </div>
                     </div>
                     
+                    {/* ÁREA DOS BOTÕES (Agora ela não será mais empurrada para fora da tela) */}
                     <div className="flex flex-wrap gap-2 shrink-0">
-                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200">✏️ Editar</button>
+                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200 shrink-0">✏️ Editar</button>
+                      
                       {abaAtiva === 'pendente' && (
                         <>
-                           <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200">📩 Lembrete</button>
-                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200">✅ Aprovar</button>
+                           <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0">📩 Lembrete</button>
+                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0">✅ Aprovar</button>
                         </>
                       )}
+                      
                       {abaAtiva === 'ativo' && (
-                         <button onClick={() => mudarStatus(perfil.id, 'inativo')} className="px-4 py-2 bg-amber-100 text-amber-700 font-bold rounded-lg text-sm hover:bg-amber-200">⏸️ Pausar</button>
+                         <button onClick={() => mudarStatus(perfil.id, 'inativo')} className="px-4 py-2 bg-amber-100 text-amber-700 font-bold rounded-lg text-sm hover:bg-amber-200 shrink-0">⏸️ Pausar</button>
                       )}
+                      
                       {abaAtiva === 'inativo' && (
                          <>
-                           <button onClick={() => dispararLembreteInativo(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200">🔔 Lembrete</button>
-                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200">▶️ Reativar</button>
+                           <button onClick={() => dispararLembreteInativo(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0">🔔 Lembrete</button>
+                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0">▶️ Reativar</button>
                          </>
                       )}
-                      <button onClick={() => excluirPerfil(perfil.id)} className="px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg text-sm border border-red-200 hover:bg-red-100">🗑️ Excluir</button>
+                      
+                      <button onClick={() => excluirPerfil(perfil.id)} className="px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg text-sm border border-red-200 hover:bg-red-100 shrink-0">🗑️ Excluir</button>
                     </div>
+
                   </div>
                 ))}
               </div>
