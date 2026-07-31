@@ -58,6 +58,7 @@ export default function AdminPage() {
   
   const [notificacao, setNotificacao] = useState({ mostrar: false, msg: '', tipo: '' })
   const [selecionados, setSelecionados] = useState<string[]>([])
+  const [clientesExpandidos, setClientesExpandidos] = useState<string[]>([]) // Controle da Sanfona
   
   const [assuntoCampanha, setAssuntoCampanha] = useState('')
   const [textoCampanha, setTextoCampanha] = useState('')
@@ -300,7 +301,7 @@ export default function AdminPage() {
   const mudarPosicaoFixa = async (id: string, posicao: string) => { await supabase.from('profiles').update({ posicao_fixa: posicao === 'nenhuma' ? null : Number(posicao) }).eq('id', id); carregarPerfis() }
   const mudarPlano = async (id: string, novoPlano: string) => { await supabase.from('profiles').update({ plano_selecionado: novoPlano }).eq('id', id); carregarPerfis() }
   const mudarDataExpiracao = async (id: string, novaData: string) => { await supabase.from('profiles').update({ data_expiracao: novaData || null }).eq('id', id); carregarPerfis() }
-  const excluirPerfil = async (id: string) => { if (confirm('EXCLUIR este cliente?')) { await supabase.from('profiles').delete().eq('id', id); carregarPerfis() } }
+  const excluirPerfil = async (id: string) => { if (confirm('EXCLUIR este cliente e seu anúncio?')) { await supabase.from('profiles').delete().eq('id', id); carregarPerfis() } }
 
   const dispararLembretePendente = async (perfil: Perfil) => {
     if (confirm(`Enviar lembrete de ativação para ${perfil.nome}?`)) {
@@ -393,6 +394,28 @@ export default function AdminPage() {
     setEnviandoMassa(false)
   }
 
+  // Lógica de agrupamento por cliente (E-mail) para a nova Interface de Sanfona
+  const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
+  const perfisAgrupadosPorCliente = perfisFiltrados.reduce((acc, perfil) => {
+      const emailChave = perfil.email || `sem-email-${perfil.id}`
+      if (!acc[emailChave]) {
+          acc[emailChave] = { 
+              nome: perfil.nome, 
+              email: perfil.email, 
+              telefone: perfil.telefone, 
+              anuncios: [] 
+          }
+      }
+      acc[emailChave].anuncios.push(perfil)
+      return acc
+  }, {} as Record<string, { nome: string, email: string, telefone?: string, anuncios: Perfil[] }>)
+  
+  const listaClientesAgrupados = Object.values(perfisAgrupadosPorCliente)
+
+  const toggleExpandirCliente = (email: string) => {
+      setClientesExpandidos(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email])
+  }
+
   const listasImportadasDisponiveis = Array.from(new Set(perfis.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
 
   const aplicarFiltroLista = (p: Perfil) => {
@@ -422,7 +445,6 @@ export default function AdminPage() {
   const selecionarMassa = (qtd: number) => setSelecionados(clientesComEmailParaMassa.slice(0, qtd).map(p => p.id))
   const selecionarTodos = () => setSelecionados(clientesComEmailParaMassa.map(p => p.id))
 
-  const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const filaFiltrada = fila.filter(item => item.status === abaFila)
 
   if (!autorizado) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">Verificando Credenciais...</div>
@@ -619,91 +641,120 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
         </div>
 
-        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO */}
+        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO (COM NOVA SANFONA) */}
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            {perfisFiltrados.length === 0 ? (
+            {listaClientesAgrupados.length === 0 ? (
               <div className="p-12 text-center text-slate-500 font-bold text-lg">Nenhum cliente com status "{abaAtiva}" no momento.</div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {perfisFiltrados.map(perfil => (
-                  <div key={perfil.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
+                {listaClientesAgrupados.map(cliente => (
+                  <div key={cliente.email} className="bg-white group transition-colors">
                     
-                    <div className="flex-1 min-w-0 w-full">
-                      <h3 className="font-bold text-slate-900 truncate">{perfil.nome}</h3>
-                      
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <p className="text-sm text-slate-600 truncate">{perfil.email}</p>
-                        {perfil.telefone && (
-                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1 shrink-0">
-                            💬 Whats
-                          </a>
-                        )}
-                        <span className="text-slate-300 hidden md:inline">|</span>
-                        <p className="text-sm text-slate-600 truncate max-w-xs md:max-w-md" title={perfil.link_site}>
-                           Site: {perfil.link_site || 'Não informado'}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm shrink-0">
-                          🖱️ {perfil.cliques?.length || 0} Cliques
-                        </span>
-                        {perfil.cliques && perfil.cliques.length > 0 && (
-                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 max-w-[200px] truncate shrink-0">
-                            Última origem: <strong>{perfil.cliques[0].origem}</strong>
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 mt-4">
-                        <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100 shrink-0">
-                          <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
-                          <input type="text" list="sugestoes-planos" value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28" />
-                          <datalist id="sugestoes-planos">
-                            <option value="1_mes">1 Mês</option><option value="3_meses">3 Meses</option><option value="6_meses">6 Meses</option><option value="12_meses">12 Meses</option><option value="vitalicio">Vitalício</option>
-                          </datalist>
-                        </div>
-
-                        <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100 shrink-0">
-                          <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
-                          <input type="date" value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''} onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none" />
-                        </div>
-                        
-                        <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100 shrink-0">
-                          <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
-                          <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none">
-                            <option value="nenhuma">Padrão</option>
-                            {[...Array(50)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 shrink-0">
-                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200 shrink-0">✏️ Editar</button>
-                      
-                      {abaAtiva === 'pendente' && (
-                        <>
-                           <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0">📩 Lembrete</button>
-                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0">✅ Aprovar</button>
-                        </>
-                      )}
-                      
-                      {abaAtiva === 'ativo' && (
-                         <button onClick={() => mudarStatus(perfil.id, 'inativo')} className="px-4 py-2 bg-amber-100 text-amber-700 font-bold rounded-lg text-sm hover:bg-amber-200 shrink-0">⏸️ Pausar</button>
-                      )}
-                      
-                      {abaAtiva === 'inativo' && (
-                         <>
-                           <button onClick={() => dispararLembreteInativo(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0">🔔 Lembrete</button>
-                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0">▶️ Reativar</button>
-                         </>
-                      )}
-                      
-                      <button onClick={() => excluirPerfil(perfil.id)} className="px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg text-sm border border-red-200 hover:bg-red-100 shrink-0">🗑️ Excluir</button>
+                    {/* CABEÇALHO DO CLIENTE (O CLIQUE DA SANFONA) */}
+                    <div 
+                      onClick={() => toggleExpandirCliente(cliente.email)}
+                      className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50"
+                    >
+                       <div>
+                           <h3 className="font-bold text-slate-900 flex items-center gap-3 text-lg">
+                               👤 {cliente.nome}
+                               <span className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
+                                   {cliente.anuncios.length} anúncio(s)
+                               </span>
+                           </h3>
+                           <p className="text-sm text-slate-500 mt-1">
+                               {cliente.email} {cliente.telefone ? ` • ${cliente.telefone}` : ''}
+                           </p>
+                       </div>
+                       <div className="bg-slate-100 text-slate-600 p-2 rounded-full">
+                           {clientesExpandidos.includes(cliente.email) ? '🔼' : '🔽'}
+                       </div>
                     </div>
 
+                    {/* CONTEÚDO EXPANDIDO (OS E-BOOKS DELE) */}
+                    {clientesExpandidos.includes(cliente.email) && (
+                      <div className="bg-slate-50 border-t border-slate-100 p-5 space-y-4">
+                        {cliente.anuncios.map(perfil => (
+                           <div key={perfil.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col md:flex-row justify-between gap-4 items-center">
+                             
+                             <div className="flex-1 min-w-0 w-full">
+                               {/* O Título do E-book agora é o grande destaque aqui dentro! */}
+                               <h4 className="font-bold text-slate-900 text-lg truncate mb-1">📖 {perfil.titulo_ebook}</h4>
+                               
+                               <div className="flex flex-wrap items-center gap-2 mb-3">
+                                 {perfil.telefone && (
+                                   <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1 shrink-0">
+                                     💬 Whats
+                                   </a>
+                                 )}
+                                 <p className="text-sm text-blue-600 hover:underline truncate max-w-xs md:max-w-md" title={perfil.link_site}>
+                                    🔗 {perfil.link_site || 'Link não informado'}
+                                 </p>
+                               </div>
+
+                               <div className="flex flex-wrap items-center gap-2 mb-4">
+                                 <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm shrink-0">
+                                   🖱️ {perfil.cliques?.length || 0} Cliques
+                                 </span>
+                                 {perfil.cliques && perfil.cliques.length > 0 && (
+                                   <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 max-w-[200px] truncate shrink-0">
+                                     Última origem: <strong>{perfil.cliques[0].origem}</strong>
+                                   </span>
+                                 )}
+                               </div>
+
+                               <div className="flex flex-wrap items-center gap-2">
+                                 <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100 shrink-0">
+                                   <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
+                                   <input type="text" list={`planos-${perfil.id}`} value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28" />
+                                   <datalist id={`planos-${perfil.id}`}>
+                                     <option value="1_mes">1 Mês</option><option value="3_meses">3 Meses</option><option value="6_meses">6 Meses</option><option value="12_meses">12 Meses</option><option value="vitalicio">Vitalício</option>
+                                   </datalist>
+                                 </div>
+
+                                 <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100 shrink-0">
+                                   <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
+                                   <input type="date" value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''} onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none" />
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100 shrink-0">
+                                   <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
+                                   <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none">
+                                     <option value="nenhuma">Padrão</option>
+                                     {[...Array(50)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
+                                   </select>
+                                 </div>
+                               </div>
+                             </div>
+                             
+                             <div className="flex flex-wrap gap-2 shrink-0">
+                               <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200 shrink-0 shadow-sm">✏️ Editar</button>
+                               
+                               {abaAtiva === 'pendente' && (
+                                 <>
+                                    <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0 shadow-sm">📩 Lembrete</button>
+                                    <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0 shadow-sm">✅ Aprovar</button>
+                                 </>
+                               )}
+                               
+                               {abaAtiva === 'ativo' && (
+                                  <button onClick={() => mudarStatus(perfil.id, 'inativo')} className="px-4 py-2 bg-amber-100 text-amber-700 font-bold rounded-lg text-sm hover:bg-amber-200 shrink-0 shadow-sm">⏸️ Pausar</button>
+                               )}
+                               
+                               {abaAtiva === 'inativo' && (
+                                  <>
+                                    <button onClick={() => dispararLembreteInativo(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0 shadow-sm">🔔 Lembrete</button>
+                                    <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0 shadow-sm">▶️ Reativar</button>
+                                  </>
+                               )}
+                               
+                               <button onClick={() => excluirPerfil(perfil.id)} className="px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg text-sm border border-red-200 hover:bg-red-100 shrink-0 shadow-sm">🗑️ Excluir</button>
+                             </div>
+                           </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
