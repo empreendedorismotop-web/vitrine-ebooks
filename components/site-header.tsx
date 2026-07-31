@@ -28,6 +28,13 @@ export function SiteHeader() {
         {/* NAVEGAÇÃO E BOTÕES */}
         <nav className="flex items-center gap-4 md:gap-6">
           <Link 
+            href="/como-funciona" 
+            className="text-sm font-bold text-slate-600 hover:text-primary transition-colors hidden sm:block"
+          >
+            Como Funciona
+          </Link>
+
+          <Link 
             href="/planos" 
             className="text-sm font-bold text-slate-600 hover:text-primary transition-colors"
           >
