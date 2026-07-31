@@ -1082,11 +1082,11 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">E-mail de Disparo (Usuário)</label>
                     <input 
-                      type="email" 
+                      type="text" /* <-- Alterado para TEXT aqui! */
                       value={configEmail.smtp_user || ''} 
                       onChange={e => setConfigEmail({...configEmail, smtp_user: e.target.value})} 
                       className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
-                      placeholder="contato@seusite.com.br" 
+                      placeholder="Usuário ou E-mail" 
                     />
                   </div>
                   <div>
