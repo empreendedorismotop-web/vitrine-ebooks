@@ -83,7 +83,7 @@ export default function ComoFuncionaPage() {
                 <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-xl">
                   <MessageCircle className="size-6 text-emerald-600 shrink-0" />
                   <div>
-                    <h3 className="font-bold text-slate-900">Grupos de WhatsApp</h3>
+                    <h3 className="font-bold text-slate-900">Divulgações no WhatsApp</h3>
                     <p className="text-sm text-slate-500">Divulgação de novidades direto no celular de um público engajado.</p>
                   </div>
                 </div>
