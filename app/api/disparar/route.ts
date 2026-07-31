@@ -48,6 +48,10 @@ export async function GET() {
               user: config.smtp_user,
               pass: config.smtp_pass,
             },
+            // BLINDAGEM TLS ATIVADA: Ignora bloqueios de certificado do servidor
+            tls: {
+              rejectUnauthorized: false 
+            }
           })
           remetente = config.smtp_user
         } else {
