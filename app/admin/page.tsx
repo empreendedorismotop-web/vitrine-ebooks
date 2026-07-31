@@ -229,9 +229,6 @@ export default function AdminPage() {
     }
   }
 
-  // ==========================================
-  // NOVO: RESETAR HISTÓRICO DE E-MAILS
-  // ==========================================
   const resetarEnviosEmail = async () => {
     if (confirm('Zerar o histórico de E-MAIL para esta lista? Eles voltarão para "Falta Enviar".')) {
       const idsParaLimpar = clientesComEmailParaMassa.filter(p => p.ultimo_email_enviado != null).map(p => p.id)
@@ -305,13 +302,62 @@ export default function AdminPage() {
   const mudarDataExpiracao = async (id: string, novaData: string) => { await supabase.from('profiles').update({ data_expiracao: novaData || null }).eq('id', id); carregarPerfis() }
   const excluirPerfil = async (id: string) => { if (confirm('EXCLUIR este cliente?')) { await supabase.from('profiles').delete().eq('id', id); carregarPerfis() } }
 
+  const dispararLembretePendente = async (perfil: Perfil) => {
+    if (confirm(`Enviar lembrete de ativação para ${perfil.nome}?`)) {
+      const novoEnvio = {
+        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome, assunto: `Finalize seu cadastro!`,
+        mensagem: 'Notamos que seu anúncio aguarda ativação. Escolha um plano para publicar sua oferta!', texto_botao: 'Ativar Agora', 
+        url_botao: `${window.location.origin}/planos`, base_url: window.location.origin, status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
+      }
+      await supabase.from('fila_envios').insert([novoEnvio])
+      mostrarNotificacao('Lembrete na Fila!', 'sucesso')
+      carregarFila()
+    }
+  }
+
+  const dispararLembreteInativo = async (perfil: Perfil) => {
+    if (confirm(`Enviar renovação para ${perfil.nome}?`)) {
+      const novoEnvio = {
+        perfil_id: perfil.id, email: perfil.email, nome: perfil.nome, assunto: `⚠️ Seu acesso expirou!`,
+        mensagem: 'Seu plano expirou e seu anúncio foi pausado. Clique para renovar.', texto_botao: 'Renovar', 
+        url_botao: `${window.location.origin}/planos`, base_url: window.location.origin, status: 'pendente', clicou: false, provedor: 'gmail', agendado_para: new Date().toISOString()
+      }
+      await supabase.from('fila_envios').insert([novoEnvio])
+      mostrarNotificacao('Renovação na Fila!', 'sucesso')
+      setAbaAtiva('fila'); setAbaFila('pendente'); carregarFila()
+    }
+  }
+
   const removerDaFila = async (id: string) => { await supabase.from('fila_envios').delete().eq('id', id); carregarFila() }
   const limparHistoricoEnviados = async () => { if (confirm('Apagar TODO o histórico?')) { await supabase.from('fila_envios').delete().eq('status', 'enviado'); carregarFila() } }
   const esvaziarFila = async () => { if (confirm('Cancelar PENDENTES?')) { await supabase.from('fila_envios').delete().eq('status', 'pendente'); carregarFila(); } }
 
-  // ==========================================
-  // DISPARO DE E-MAIL EM MASSA (AGORA MARCA COMO ENVIADO)
-  // ==========================================
+  const reenviarParaNaoClicadores = async () => {
+    const naoClicaram = fila.filter(item => item.status === 'enviado' && !item.clicou)
+    if (naoClicaram.length === 0) return mostrarNotificacao('Todos já clicaram!', 'sucesso')
+
+    if (confirm(`Reenviar para ${naoClicaram.length} clientes que ignoraram?`)) {
+      setEnviandoMassa(true)
+      const registrosFila = []
+      let tempoAgendado = new Date() 
+      for (let i = 0; i < naoClicaram.length; i += 2) {
+        const lote = naoClicaram.slice(i, i + 2)
+        for (const item of lote) {
+          registrosFila.push({
+            perfil_id: item.perfil_id, email: item.email, nome: item.nome, assunto: `[Lembrete] ${item.assunto}`,
+            mensagem: item.mensagem || 'Você não abriu nosso último e-mail. Aqui está!', texto_botao: item.texto_botao || 'Acessar Agora', 
+            url_botao: item.url_botao || window.location.origin, base_url: item.base_url || window.location.origin,
+            status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
+          })
+        }
+        tempoAgendado = new Date(tempoAgendado.getTime() + 60000)
+      }
+      await supabase.from('fila_envios').insert(registrosFila)
+      mostrarNotificacao(`${registrosFila.length} e-mails agendados!`, 'sucesso')
+      setAbaFila('pendente'); carregarFila(); setEnviandoMassa(false)
+    }
+  }
+
   const dispararCampanhaMassa = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selecionados.length === 0) return mostrarNotificacao('Selecione um cliente.', 'erro')
@@ -336,24 +382,17 @@ export default function AdminPage() {
         tempoAgendado = new Date(tempoAgendado.getTime() + (intervaloLote * 60000))
       }
       
-      // 1. Salva na fila de disparos
       await supabase.from('fila_envios').insert(registrosFila)
-      
-      // 2. ATUALIZA TODOS OS PERFIS COM ESSE E-MAIL PARA "JÁ ENVIADO"
       const emailsEnviados = clientesParaEnviar.map(p => p.email)
       await supabase.from('profiles').update({ ultimo_email_enviado: new Date().toISOString() }).in('email', emailsEnviados)
       
       mostrarNotificacao(`Sucesso! ${listaFinalIds.length} agendados.`, 'sucesso')
       setSelecionados([]); setAssuntoCampanha(''); setTextoCampanha(''); setTextoBotao(''); setUrlBotao('')
-      carregarFila() 
-      carregarPerfis() // Recarrega para atualizar a interface
+      carregarFila(); carregarPerfis()
     } catch (error) { mostrarNotificacao('Erro.', 'erro') }
     setEnviandoMassa(false)
   }
 
-  // ==========================================
-  // FILTROS E DEDUPLICAÇÃO
-  // ==========================================
   const listasImportadasDisponiveis = Array.from(new Set(perfis.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
 
   const aplicarFiltroLista = (p: Perfil) => {
@@ -362,13 +401,8 @@ export default function AdminPage() {
     return p.titulo_ebook === filtroListaAtual && p.plano_selecionado === 'Importado';
   }
 
-  // 1. Apenas contatos com E-mail VÁLIDO e respeitando o filtro
   const emailsValidosFiltrados = perfis.filter(p => p.email && !p.email.includes('@importado.com')).filter(aplicarFiltroLista)
-
-  // 2. DEDUPLICAÇÃO ABSOLUTA: Agrupa pelo e-mail (Tira os repitidos da lista)
   const clientesUnicosEmail = Array.from(new Map(emailsValidosFiltrados.map(p => [p.email.toLowerCase(), p])).values())
-
-  // 3. APLICA O FILTRO DE "FALTA ENVIAR" / "JÁ ENVIADO"
   const clientesComEmailParaMassa = clientesUnicosEmail.filter(p => {
     if (filtroEmailMassa === 'todos') return true
     if (filtroEmailMassa === 'enviados') return p.ultimo_email_enviado != null
@@ -376,7 +410,6 @@ export default function AdminPage() {
     return true
   })
 
-  // Para o WhatsApp (Sem deduplicação de e-mail, focado no telefone)
   const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
   const clientesWhatsAppFiltrados = clientesComWhatsapp.filter(p => {
     if (filtroWhats === 'todos') return true
@@ -398,7 +431,159 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
-      {/* ... [OS MODAIS DE IMPORTAÇÃO, EDIÇÃO E LIMPEZA CONTINUAM OS MESMOS] ... */}
+      {modalImportacaoAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="p-5 border-b border-slate-100 bg-emerald-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-emerald-900">📥 Importar Lista de Leads</h2>
+                <p className="text-emerald-700 text-xs mt-1">Cadastre e-mails ou números em massa.</p>
+              </div>
+              <button onClick={() => setModalImportacaoAberto(false)} className="text-emerald-400 hover:text-emerald-700 text-2xl font-bold">&times;</button>
+            </div>
+            
+            <div className="p-6">
+              
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-slate-700 mb-1">Nome da Lista (Opcional)</label>
+                <input 
+                  type="text" 
+                  value={nomeListaImportacao} 
+                  onChange={e => setNomeListaImportacao(e.target.value)} 
+                  className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-emerald-500" 
+                  placeholder="Ex: Leads Ebook Agosto" 
+                />
+              </div>
+
+              <p className="text-sm text-slate-600 mb-2 font-bold">Cole os dados (1 por linha):</p>
+              <textarea 
+                rows={8} 
+                className="w-full p-4 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm font-mono"
+                placeholder="exemplo@gmail.com&#10;5511999999999&#10;outro@email.com&#10;..."
+                value={textoImportacao}
+                onChange={(e) => setTextoImportacao(e.target.value)}
+              />
+            </div>
+
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setModalImportacaoAberto(false)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
+              <button onClick={processarImportacao} disabled={importando || !textoImportacao.trim()} className="px-5 py-2 rounded-lg font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md disabled:opacity-50 flex items-center gap-2">
+                {importando ? '⏳ Importando...' : '📥 Iniciar Importação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {perfilEditando && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100 bg-purple-50 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-purple-900">✏️ Editar Anúncio (Admin)</h2>
+                <p className="text-purple-700 text-xs mt-1">Alterando dados de: <strong>{perfilEditando.email}</strong></p>
+              </div>
+              <button onClick={() => setPerfilEditando(null)} className="text-purple-400 hover:text-purple-700 text-2xl font-bold">&times;</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+              <form onSubmit={salvarEdicaoAnuncio} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Nome / Autor *</label>
+                    <input type="text" value={perfilEditando.nome || ''} onChange={e => setPerfilEditando({...perfilEditando, nome: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp / Telefone *</label>
+                    <input type="text" value={perfilEditando.telefone || ''} onChange={e => setPerfilEditando({...perfilEditando, telefone: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Ex: 61982..." required />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Título do Material *</label>
+                    <input type="text" value={perfilEditando.titulo_ebook || ''} onChange={e => setPerfilEditando({...perfilEditando, titulo_ebook: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino *</label>
+                    <input type="url" value={perfilEditando.link_site || ''} onChange={e => setPerfilEditando({...perfilEditando, link_site: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" required />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Descrição *</label>
+                  <textarea rows={4} value={perfilEditando.descricao || ''} onChange={e => setPerfilEditando({...perfilEditando, descricao: e.target.value})} className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-purple-500" placeholder="Texto que aparece na vitrine..." required />
+                </div>
+                
+                <div className="border border-slate-200 bg-slate-50 p-5 rounded-xl">
+                    <label className="block text-sm font-bold text-slate-900 mb-2">Capa do Material *</label>
+                    
+                    <input 
+                      type="file" accept="image/*" onChange={handleUploadCapaAdmin} disabled={uploading}
+                      required={!perfilEditando.imagem_url} 
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 transition-colors cursor-pointer mb-2" 
+                    />
+                    
+                    {uploading && <p className="text-sm font-bold text-purple-600 animate-pulse mt-2">Enviando imagem...</p>}
+                    {perfilEditando.imagem_url && !uploading && (
+                      <div className="mt-4 flex flex-col items-start bg-white p-4 rounded-lg border border-slate-200">
+                        <span className="text-xs font-bold text-slate-400 mb-2 uppercase">Capa Atual</span>
+                        <img src={perfilEditando.imagem_url} alt="Capa" className="h-32 object-contain rounded shadow-sm" />
+                      </div>
+                    )}
+                </div>
+                
+                <div className="pt-4 flex gap-3 justify-end border-t border-slate-100 mt-6">
+                  <button type="button" onClick={() => setPerfilEditando(null)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
+                  <button type="submit" disabled={uploading} className="px-5 py-2 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md disabled:opacity-50">
+                    {uploading ? 'Aguarde...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalLimpezaAberto && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-2xl font-bold text-slate-900">Limpeza de Contatos Frios</h2>
+              <p className="text-slate-500 text-sm mt-1">Exclua leads que esfriaram para proteger o domínio e as suas campanhas.</p>
+            </div>
+            <div className="p-6 flex-1 overflow-y-auto">
+              <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                <span className="text-xl">🛡️</span>
+                <div>
+                  <p className="font-bold text-emerald-800 text-sm mb-1">Trava de Segurança Ativada</p>
+                  <p className="text-xs text-emerald-700">Fique tranquilo! Clientes com anúncios <strong>Ativos</strong> ou <strong>Pendentes</strong> estão blindados. O sistema buscará apenas os contatos que já estão na sua aba de <strong>Inativos</strong>.</p>
+                </div>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-slate-700 mb-2">Selecione o Período de Inatividade Absoluta:</label>
+                <select value={diasInatividade} onChange={(e) => setDiasInatividade(Number(e.target.value))} className="w-full p-3 border border-slate-200 rounded-lg outline-none font-bold text-slate-800 bg-white">
+                  <option value={30}>Há mais de 30 dias (1 Mês)</option>
+                  <option value={60}>Há mais de 60 dias (2 Meses)</option>
+                  <option value={90}>Há mais de 90 dias (3 Meses - Recomendado)</option>
+                  <option value={120}>Há mais de 120 dias (4 Meses)</option>
+                </select>
+              </div>
+              <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
+                <p className="font-bold text-rose-800 mb-3 text-sm">
+                  {perfis.filter(p => p.status === 'inativo' && (!p.cliques || p.cliques.length === 0) && (p.created_at ? new Date(p.created_at) : new Date()) < (new Date(new Date().setDate(new Date().getDate() - diasInatividade)))).length === 0 
+                    ? `Nenhum contato INATIVO e SEM CLIQUES cadastrado há mais de ${diasInatividade} dias foi encontrado.` 
+                    : `⚠️ ${perfis.filter(p => p.status === 'inativo' && (!p.cliques || p.cliques.length === 0) && (p.created_at ? new Date(p.created_at) : new Date()) < (new Date(new Date().setDate(new Date().getDate() - diasInatividade)))).length} contato(s) inativo(s) se encaixa(m) nessa regra e será(ão) excluído(s):`}
+                </p>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setModalLimpezaAberto(false)} className="px-6 py-2.5 rounded-lg font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100">Cancelar</button>
+              <button onClick={executarLimpezaFrios} className="px-6 py-2.5 rounded-lg font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md">Confirmar e Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {notificacao.mostrar && (
         <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl font-bold text-white transition-all transform translate-y-0 ${notificacao.tipo === 'sucesso' ? 'bg-emerald-600' : 'bg-red-600'}`}>
@@ -434,9 +619,153 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
         </div>
 
-        {/* ... [AS ABAS DE PENDENTE, ATIVO, INATIVO E FILA CONTINUAM AS MESMAS] ... */}
+        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO */}
+        {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {perfisFiltrados.length === 0 ? (
+              <div className="p-12 text-center text-slate-500 font-bold text-lg">Nenhum cliente com status "{abaAtiva}" no momento.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {perfisFiltrados.map(perfil => (
+                  <div key={perfil.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
+                    
+                    <div className="flex-1 min-w-0 w-full">
+                      <h3 className="font-bold text-slate-900 truncate">{perfil.nome}</h3>
+                      
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <p className="text-sm text-slate-600 truncate">{perfil.email}</p>
+                        {perfil.telefone && (
+                          <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1 shrink-0">
+                            💬 Whats
+                          </a>
+                        )}
+                        <span className="text-slate-300 hidden md:inline">|</span>
+                        <p className="text-sm text-slate-600 truncate max-w-xs md:max-w-md" title={perfil.link_site}>
+                           Site: {perfil.link_site || 'Não informado'}
+                        </p>
+                      </div>
 
-        {/* 📧 ABA DE E-MAIL EM MASSA ATUALIZADA */}
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm shrink-0">
+                          🖱️ {perfil.cliques?.length || 0} Cliques
+                        </span>
+                        {perfil.cliques && perfil.cliques.length > 0 && (
+                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 max-w-[200px] truncate shrink-0">
+                            Última origem: <strong>{perfil.cliques[0].origem}</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-4">
+                        <div className="flex items-center gap-2 bg-indigo-50 px-2 py-1.5 rounded-md border border-indigo-100 shrink-0">
+                          <label className="text-[10px] uppercase font-bold text-indigo-700 tracking-wide">Plano:</label>
+                          <input type="text" list="sugestoes-planos" value={perfil.plano_selecionado || ''} onChange={(e) => mudarPlano(perfil.id, e.target.value)} placeholder="Ex: 5 meses" className="text-xs font-bold bg-white text-slate-700 border border-indigo-200 rounded p-1 outline-none w-28" />
+                          <datalist id="sugestoes-planos">
+                            <option value="1_mes">1 Mês</option><option value="3_meses">3 Meses</option><option value="6_meses">6 Meses</option><option value="12_meses">12 Meses</option><option value="vitalicio">Vitalício</option>
+                          </datalist>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-rose-50 px-2 py-1.5 rounded-md border border-rose-100 shrink-0">
+                          <label className="text-[10px] uppercase font-bold text-rose-700 tracking-wide">Vence em:</label>
+                          <input type="date" value={perfil.data_expiracao ? perfil.data_expiracao.split('T')[0] : ''} onChange={(e) => mudarDataExpiracao(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-rose-200 rounded p-1 outline-none" />
+                        </div>
+                        
+                        <div className="flex items-center gap-2 bg-amber-50 px-2 py-1.5 rounded-md border border-amber-100 shrink-0">
+                          <label className="text-[10px] uppercase font-bold text-amber-700 tracking-wide">Posição VIP:</label>
+                          <select value={perfil.posicao_fixa || 'nenhuma'} onChange={(e) => mudarPosicaoFixa(perfil.id, e.target.value)} className="text-xs font-bold bg-white text-slate-700 border border-amber-200 rounded p-1 outline-none">
+                            <option value="nenhuma">Padrão</option>
+                            {[...Array(50)].map((_, i) => (<option key={i+1} value={i+1}>Top {i+1}</option>))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      <button onClick={() => setPerfilEditando(perfil)} className="px-4 py-2 bg-purple-100 text-purple-700 font-bold rounded-lg text-sm hover:bg-purple-200 shrink-0">✏️ Editar</button>
+                      
+                      {abaAtiva === 'pendente' && (
+                        <>
+                           <button onClick={() => dispararLembretePendente(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0">📩 Lembrete</button>
+                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0">✅ Aprovar</button>
+                        </>
+                      )}
+                      
+                      {abaAtiva === 'ativo' && (
+                         <button onClick={() => mudarStatus(perfil.id, 'inativo')} className="px-4 py-2 bg-amber-100 text-amber-700 font-bold rounded-lg text-sm hover:bg-amber-200 shrink-0">⏸️ Pausar</button>
+                      )}
+                      
+                      {abaAtiva === 'inativo' && (
+                         <>
+                           <button onClick={() => dispararLembreteInativo(perfil)} className="px-4 py-2 bg-blue-100 text-blue-700 font-bold rounded-lg text-sm hover:bg-blue-200 shrink-0">🔔 Lembrete</button>
+                           <button onClick={() => mudarStatus(perfil.id, 'ativo')} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg text-sm hover:bg-emerald-200 shrink-0">▶️ Reativar</button>
+                         </>
+                      )}
+                      
+                      <button onClick={() => excluirPerfil(perfil.id)} className="px-4 py-2 bg-red-50 text-red-600 font-bold rounded-lg text-sm border border-red-200 hover:bg-red-100 shrink-0">🗑️ Excluir</button>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ⏳ ABA DE FILA (MONITOR DE ENVIOS) */}
+        {abaAtiva === 'fila' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Servidor de Envios</h2>
+                <p className="text-sm text-slate-500 mt-1">Acompanhe cliques, status e limpe o histórico.</p>
+              </div>
+              <div className="flex bg-slate-200/50 p-1 rounded-lg">
+                  <button onClick={() => setAbaFila('pendente')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${abaFila === 'pendente' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Pendentes</button>
+                  <button onClick={() => setAbaFila('enviado')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${abaFila === 'enviado' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Enviados</button>
+                  <button onClick={() => setAbaFila('erro')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${abaFila === 'erro' ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Com Erro</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {abaFila === 'pendente' && filaFiltrada.length > 0 && (
+                  <button onClick={esvaziarFila} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">🛑 Cancelar Pendentes</button>
+                )}
+                {abaFila === 'enviado' && filaFiltrada.length > 0 && (
+                  <>
+                    <button onClick={reenviarParaNaoClicadores} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 shadow-sm">🔄 Reenviar (Não Clicou)</button>
+                    <button onClick={limparHistoricoEnviados} className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-bold hover:bg-red-100">🧹 Limpar Tudo</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {filaFiltrada.length === 0 ? (
+              <div className="p-12 text-center"><span className="text-4xl mb-4 block">{abaFila === 'pendente' ? '⏳' : abaFila === 'enviado' ? '✅' : '🛡️'}</span><p className="text-slate-500 font-bold text-lg">Nenhum e-mail {abaFila} no momento.</p></div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {filaFiltrada.map(item => (
+                  <div key={item.id} className="p-5 flex flex-col md:flex-row justify-between gap-4 items-center hover:bg-slate-50 transition-colors">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <p className="font-bold text-slate-900">{item.nome} <span className="text-sm font-normal text-slate-500">({item.email})</span></p>
+                        {abaFila === 'enviado' && (item.clicou ? <span className="text-[10px] uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold">🎯 Clicou</span> : <span className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-1 rounded-md font-bold">🙈 Ignorou</span>)}
+                        {item.provedor && <span className="text-[10px] uppercase bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold">{item.provedor}</span>}
+                      </div>
+                      <p className="text-sm text-slate-600 mt-1">Assunto: <span className="italic">{item.assunto}</span></p>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-[10px] text-slate-500 font-bold uppercase">{abaFila === 'pendente' ? 'Agendado' : abaFila === 'enviado' ? 'Disparado' : 'Falha'}</p>
+                        <p className={`text-sm font-bold px-3 py-1 rounded-md mt-1 ${abaFila === 'pendente' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}>{new Date(item.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                      <button onClick={() => removerDaFila(item.id)} className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200">🗑️ {abaFila === 'pendente' ? 'Cancelar' : 'Excluir'}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 📧 ABA DE E-MAIL EM MASSA */}
         {abaAtiva === 'campanhas' && (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -458,7 +787,6 @@ export default function AdminPage() {
                    </select>
                  </div>
 
-                 {/* NOVOS BOTÕES DE FILTRO DE E-MAIL (IGUAL AO WHATSAPP) */}
                  <div className="flex flex-wrap gap-2 items-center">
                    <button onClick={() => setFiltroEmailMassa('todos')} className={`px-3 py-1 rounded text-xs font-bold ${filtroEmailMassa === 'todos' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 border border-blue-200'}`}>Todos ({clientesUnicosEmail.length})</button>
                    <button onClick={() => setFiltroEmailMassa('nao_enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroEmailMassa === 'nao_enviados' ? 'bg-blue-600 text-white' : 'bg-white text-blue-700 border border-blue-200'}`}>Falta Enviar</button>
@@ -544,7 +872,194 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ... [A ABA DE WHATSAPP DIRETO E CONFIGURAÇÕES CONTINUAM AS MESMAS] ... */}
+        {/* 💬 ABA DE WHATSAPP DIRETO */}
+        {abaAtiva === 'whatsapp' && (
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+               
+               <div className="p-4 bg-emerald-50 border-b border-emerald-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                 
+                 <div className="flex items-center gap-2">
+                   <label className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Filtrar:</label>
+                   <select 
+                     value={filtroListaAtual} 
+                     onChange={(e) => setFiltroListaAtual(e.target.value)} 
+                     className="text-sm font-bold bg-white text-emerald-900 border border-emerald-300 rounded p-1.5 outline-none"
+                   >
+                     <option value="todos">Todos os Contatos c/ Whats</option>
+                     <option value="vitrine">Apenas Clientes da Vitrine</option>
+                     {listasImportadasDisponiveis.map(lista => (
+                       <option key={lista} value={lista}>{lista}</option>
+                     ))}
+                   </select>
+                 </div>
+                 
+                 <div className="flex flex-wrap gap-2 items-center">
+                   <button onClick={() => setFiltroWhats('todos')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'todos' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Todos ({clientesWhatsAppFiltrados.length})</button>
+                   <button onClick={() => setFiltroWhats('nao_enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'nao_enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Falta Enviar</button>
+                   <button onClick={() => setFiltroWhats('enviados')} className={`px-3 py-1 rounded text-xs font-bold ${filtroWhats === 'enviados' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>Já Enviados</button>
+                   <span className="text-emerald-300 mx-1">|</span>
+                   <button onClick={resetarEnviosWhatsApp} className="px-3 py-1 rounded text-xs font-bold bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 shadow-sm transition-colors">
+                     🔄 Resetar
+                   </button>
+                 </div>
+               </div>
+               
+               <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                 {clientesWhatsAppFiltrados.map((p) => (
+                   <div key={p.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                     <div className="flex-1">
+                       <p className="font-bold text-slate-900 flex items-center gap-2">
+                         {p.nome} 
+                         <span className="text-xs text-slate-500 font-normal">({p.telefone})</span>
+                       </p>
+                       <p className="text-xs text-slate-400 mt-1">
+                         {p.ultimo_whats_enviado 
+                           ? `Último envio: ${new Date(p.ultimo_whats_enviado).toLocaleDateString('pt-BR')} às ${new Date(p.ultimo_whats_enviado).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` 
+                           : 'Nenhum envio registrado'}
+                       </p>
+                     </div>
+                     <div className="flex items-center gap-3">
+                       <a 
+                         href={formatarLinkWhatsAppCampanha(p.telefone, textoWhatsCampanha)} 
+                         target="_blank" 
+                         rel="noopener noreferrer" 
+                         onClick={() => marcarWhatsAppEnviado(p.id)}
+                         className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                       >
+                         💬 Abrir Conversa
+                       </a>
+                     </div>
+                   </div>
+                 ))}
+                 
+                 {clientesWhatsAppFiltrados.length === 0 && (
+                   <div className="p-8 text-center text-slate-500 font-bold">Nenhum cliente encontrado para este filtro.</div>
+                 )}
+               </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
+               <h3 className="font-bold text-xl text-slate-900 mb-2">Mensagem do Disparo</h3>
+               <p className="text-sm text-slate-500 mb-6">Deixe em branco ou digite um texto para enviar para a lista selecionada.</p>
+               
+               <div className="space-y-4">
+                 <div>
+                   <textarea 
+                     value={textoWhatsCampanha} 
+                     onChange={e => setTextoWhatsCampanha(e.target.value)} 
+                     rows={8} 
+                     className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg outline-none focus:border-emerald-500 transition-colors" 
+                     placeholder="Digite a mensagem ou cole o seu link..." 
+                   />
+                 </div>
+                 
+                 <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                   <p className="text-xs text-emerald-800 font-bold mb-2">💡 Dica de Disparo:</p>
+                   <ul className="text-xs text-emerald-700 space-y-1 list-disc pl-4">
+                     <li>Selecione a sua lista no filtro do topo.</li>
+                     <li>Filtre por "Falta Enviar".</li>
+                     <li>Ao clicar em "Abrir Conversa", o status atualiza e a pessoa some da lista "Falta Enviar" para você não mandar duplicado.</li>
+                   </ul>
+                 </div>
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ⚙️ ABA DE CONFIGURAÇÕES (AGORA RESTAURADA 100%) */}
+        {abaAtiva === 'config' && (
+          <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-xl font-bold text-slate-900">Configurações de Disparo (API)</h2>
+              <p className="text-sm text-slate-500 mt-1">Gerencie os servidores de e-mail que o sistema utiliza sem precisar acessar o código.</p>
+            </div>
+            
+            <form onSubmit={salvarConfiguracoesEmail} className="p-6 space-y-8">
+              
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Servidor Gmail (Padrão)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">E-mail do Gmail</label>
+                    <input 
+                      type="email" 
+                      value={configEmail.gmail_email || ''} 
+                      onChange={e => setConfigEmail({...configEmail, gmail_email: e.target.value})} 
+                      className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
+                      placeholder="seuemail@gmail.com" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Senha de Aplicativo</label>
+                    <input 
+                      type="password" 
+                      value={configEmail.gmail_senha || ''} 
+                      onChange={e => setConfigEmail({...configEmail, gmail_senha: e.target.value})} 
+                      className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
+                      placeholder="••••••••••••" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">SMTP Externo (Lotes Grandes)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Servidor (Host)</label>
+                    <input 
+                      type="text" 
+                      value={configEmail.smtp_host || ''} 
+                      onChange={e => setConfigEmail({...configEmail, smtp_host: e.target.value})} 
+                      className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
+                      placeholder="ex: smtp.hostinger.com" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Porta</label>
+                    <input 
+                      type="text" 
+                      value={configEmail.smtp_port || ''} 
+                      onChange={e => setConfigEmail({...configEmail, smtp_port: e.target.value})} 
+                      className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
+                      placeholder="ex: 465" 
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">E-mail de Disparo (Usuário)</label>
+                    <input 
+                      type="email" 
+                      value={configEmail.smtp_user || ''} 
+                      onChange={e => setConfigEmail({...configEmail, smtp_user: e.target.value})} 
+                      className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
+                      placeholder="contato@seusite.com.br" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Senha do E-mail</label>
+                    <input 
+                      type="password" 
+                      value={configEmail.smtp_pass || ''} 
+                      onChange={e => setConfigEmail({...configEmail, smtp_pass: e.target.value})} 
+                      className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
+                      placeholder="••••••••••••" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
+                <button type="submit" disabled={salvandoConfig} className="px-6 py-3 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-700 shadow-md disabled:opacity-50">
+                  {salvandoConfig ? 'Salvando...' : '💾 Salvar Configurações'}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        )}
 
       </div>
     </div>
