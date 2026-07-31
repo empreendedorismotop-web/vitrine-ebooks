@@ -19,7 +19,7 @@ export default function ComoFuncionaPage() {
             </h1>
             <div className="h-6"></div> {/* Espaçamento exato de uma linha */}
             <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Entenda a dinâmica do nosso ecossistema criado exclusivamente para acelerar as vendas de autores e produtores de conteúdo independente.
+              Entenda a dinâmica do nosso ecossistema criado exclusivamente para ampliar a visibilidade e o alcance de autores e produtores de conteúdo independente.
             </p>
           </div>
 
@@ -37,7 +37,7 @@ export default function ComoFuncionaPage() {
               </div>
               <div className="h-6"></div> {/* Espaçamento exato de uma linha */}
               <p className="text-slate-600 leading-relaxed text-lg">
-                A Vitrine E-books & Cursos foi projetada para resolver o maior problema dos criadores digitais: a falta de tráfego. Nossa plataforma não é apenas um catálogo estático, mas sim um motor ativo de visitas. Ao cadastrar o seu produto, nós direcionamos compradores em potencial diretamente para a sua página de vendas ou checkout, sem intermediários.
+                A Vitrine E-books & Cursos foi projetada para ajudar na principal dificuldade dos criadores digitais: a falta de exposição. Nossa plataforma atua como uma vitrine ativa. Ao cadastrar o seu produto, nós trabalhamos para direcionar tráfego qualificado e pessoas interessadas diretamente para a sua página de vendas ou checkout, aumentando suas oportunidades de negócio.
               </p>
             </div>
 
@@ -53,7 +53,7 @@ export default function ComoFuncionaPage() {
               </div>
               <div className="h-6"></div> {/* Espaçamento exato de uma linha */}
               <p className="text-slate-600 leading-relaxed text-lg">
-                Chega de ficar esquecido no fundo das pesquisas. Nosso sistema possui um algoritmo inteligente de rotatividade contínua. Isso garante que todos os anúncios ativos, independentemente da data de cadastro, ocupem posições de destaque e passem pela primeira página da vitrine de forma justa e igualitária. Todo mundo tem a chance de brilhar.
+                Chega de ficar esquecido no fundo das pesquisas. Nosso sistema possui um algoritmo inteligente de rotatividade contínua. Isso garante que todos os anúncios ativos, independentemente da data de cadastro, ocupem posições de destaque e passem pela primeira página da vitrine de forma justa e igualitária. Todo mundo tem a chance de obter mais visibilidade.
               </p>
             </div>
 
@@ -69,7 +69,7 @@ export default function ComoFuncionaPage() {
               </div>
               <div className="h-6"></div> {/* Espaçamento exato de uma linha */}
               <p className="text-slate-600 leading-relaxed text-lg mb-8">
-                Nós investimos pesado para trazer visitantes para a plataforma todos os dias. O seu e-book será impulsionado por um ecossistema de marketing completo, composto por 4 frentes de divulgação maciça:
+                Nós trabalhamos continuamente para trazer visitantes para a plataforma todos os dias. O seu e-book fará parte de um ecossistema de marketing, exposto através de 4 frentes de divulgação:
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -77,28 +77,28 @@ export default function ComoFuncionaPage() {
                   <Mail className="size-6 text-slate-700 shrink-0" />
                   <div>
                     <h3 className="font-bold text-slate-900">E-mail Marketing</h3>
-                    <p className="text-sm text-slate-500">Disparos em massa para nossa base de leads engajados.</p>
+                    <p className="text-sm text-slate-500">Disparos em massa para nossa base de leads interessados.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-xl">
                   <MessageCircle className="size-6 text-emerald-600 shrink-0" />
                   <div>
                     <h3 className="font-bold text-slate-900">Grupos de WhatsApp</h3>
-                    <p className="text-sm text-slate-500">Divulgação direta no celular de potenciais compradores.</p>
+                    <p className="text-sm text-slate-500">Divulgação de novidades direto no celular de um público engajado.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-xl">
                   <Camera className="size-6 text-pink-600 shrink-0" />
                   <div>
                     <h3 className="font-bold text-slate-900">Redes Sociais</h3>
-                    <p className="text-sm text-slate-500">Presença forte e exposição constante no Instagram.</p>
+                    <p className="text-sm text-slate-500">Presença forte e exposição constante do catálogo no Instagram.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 p-4 rounded-xl">
                   <MousePointerClick className="size-6 text-blue-600 shrink-0" />
                   <div>
                     <h3 className="font-bold text-slate-900">Tráfego Pago</h3>
-                    <p className="text-sm text-slate-500">Anúncios rodando diariamente para atrair público novo.</p>
+                    <p className="text-sm text-slate-500">Anúncios rodando diariamente para atrair tráfego novo.</p>
                   </div>
                 </div>
               </div>
@@ -106,13 +106,13 @@ export default function ComoFuncionaPage() {
 
           </div>
 
-          {/* Chamada de Ação Final */}
+          {/* Chamada de Ação Final (Com botão verde esmeralda forte) */}
           <div className="mt-16 text-center">
             <Link 
               href="/cadastro" 
-              className="inline-flex items-center gap-2 px-8 py-4 bg-primary hover:bg-primary/90 text-white font-bold rounded-full shadow-lg transition-transform hover:-translate-y-1 text-lg"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-full shadow-lg transition-transform hover:-translate-y-1 text-lg"
             >
-              Quero Anunciar Agora
+              Quero Mais Exposição Agora
               <ArrowRight className="size-5" />
             </Link>
           </div>
