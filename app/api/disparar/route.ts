@@ -56,16 +56,23 @@ export async function GET() {
           remetente = config.gmail_email
         }
 
+        // 👇 O SEGREDO DO RASTREAMENTO: Criamos um link blindado passando pela nossa própria API
+        const linkCriptografado = item.url_botao 
+          ? `${item.base_url}/api/clique?f_id=${item.id}&url=${encodeURIComponent(item.url_botao)}`
+          : '#';
+
+        const mensagemFormatada = item.mensagem ? item.mensagem.replace(/\n/g, '<br>') : '';
+
         await transporter.sendMail({
           from: `"Vitrine E-books" <${remetente}>`,
           to: item.email,
           subject: item.assunto,
           html: `
             <div style="font-family: sans-serif; color: #333; max-w: 600px; margin: 0 auto;">
-              <p>${item.mensagem}</p>
+              <p>${mensagemFormatada}</p>
               ${item.url_botao ? `
                 <br>
-                <a href="${item.url_botao}" style="display: inline-block; padding: 14px 28px; background-color: #059669; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                <a href="${linkCriptografado}" style="display: inline-block; padding: 14px 28px; background-color: #059669; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold;">
                   ${item.texto_botao || 'Acessar Material'}
                 </a>
               ` : ''}
