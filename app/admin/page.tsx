@@ -1106,7 +1106,7 @@ export default function AdminPage() {
                 {/* 👇 AQUI ESTÁ O NOVO CAMPO QUE CRIAMOS! 👇 */}
                 <div className="mt-4 p-4 bg-purple-50 border border-purple-100 rounded-xl">
                   <label className="block text-sm font-bold text-purple-900 mb-1">E-mail do Remetente (O que aparece para o lead)</label>
-                  <p className="text-xs text-purple-700 mb-3">Este e-mail DEVE estar verificado e autorizado lá dentro do painel da IPZ Marketing/Mailrelay.</p>
+                  <p className="text-xs text-purple-700 mb-3">Este e-mail DEVE estar verificado e autorizado lá dentro do painel smtp.</p>
                   <input 
                     type="email" 
                     value={configEmail.smtp_remetente || ''} 
