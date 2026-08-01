@@ -28,30 +28,28 @@ export async function GET() {
         let transporter;
         let remetente;
 
-        // 🟢 MOTOR 1: SMTP EXTERNO (IPZ Marketing)
         if (item.provedor === 'externo') {
           transporter = nodemailer.createTransport({
             host: config.smtp_host,
             port: Number(config.smtp_port),
             secure: Number(config.smtp_port) === 465,
             auth: {
-              user: config.smtp_user, // Credencial de login (ex: qxwkbvebgkvd)
+              user: config.smtp_user, // Usuário de login da IPZ
               pass: config.smtp_pass,
             },
             tls: { rejectUnauthorized: false }
           })
           
-          // O seu e-mail profissional verificado na IPZ:
-          remetente = 'suporte@marketingdigitaltop.com.br' 
+          // 👇 AQUI ESTÁ A MÁGICA: Agora ele puxa do banco de dados! 
+          // Se o campo estiver vazio, ele usa um fallback genérico para não quebrar.
+          remetente = config.smtp_remetente || config.smtp_user 
           
-        } 
-        // 🔴 MOTOR 2: GMAIL PADRÃO (Intacto)
-        else {
+        } else {
           transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
-              user: config.gmail_email, // Seu Gmail cadastrado no painel
-              pass: config.gmail_senha, // Senha de App do Google
+              user: config.gmail_email,
+              pass: config.gmail_senha,
             },
           })
           remetente = config.gmail_email
