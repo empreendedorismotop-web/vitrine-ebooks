@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic' // 👈 A CHAVE PARA DESTRAVAR O CACHE DO VERCEL
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
@@ -34,14 +36,13 @@ export async function GET() {
             port: Number(config.smtp_port),
             secure: Number(config.smtp_port) === 465,
             auth: {
-              user: config.smtp_user, // Usuário de login da IPZ
+              user: config.smtp_user, 
               pass: config.smtp_pass,
             },
             tls: { rejectUnauthorized: false }
           })
           
-          // 👇 AQUI ESTÁ A MÁGICA: Agora ele puxa do banco de dados! 
-          // Se o campo estiver vazio, ele usa um fallback genérico para não quebrar.
+          // Agora o Vercel é obrigado a ler isso atualizado do banco!
           remetente = config.smtp_remetente || config.smtp_user 
           
         } else {
