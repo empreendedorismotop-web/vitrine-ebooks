@@ -87,7 +87,6 @@ export default function AdminPage() {
   
   const [filtroListaAtual, setFiltroListaAtual] = useState('todos')
 
-  // 👇 NOVA GAVETA ADICIONADA AQUI: smtp_remetente
   const [configEmail, setConfigEmail] = useState({
     gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_remetente: ''
   })
@@ -98,8 +97,14 @@ export default function AdminPage() {
     try {
       const abaSalva = localStorage.getItem('vitrine_aba_ativa')
       if (abaSalva) setAbaAtiva(abaSalva)
+      
       const filaSalva = localStorage.getItem('vitrine_aba_fila')
       if (filaSalva) setAbaFila(filaSalva)
+      
+      // 👇 A MÁGICA DA BOLINHA FIXA AQUI
+      const provedorSalvo = localStorage.getItem('vitrine_provedor_email')
+      if (provedorSalvo) setProvedor(provedorSalvo)
+
     } catch (e) { console.warn("localStorage indisponível") }
     verificarSeguranca()
   }, [])
@@ -108,8 +113,11 @@ export default function AdminPage() {
     if (isClient) {
       localStorage.setItem('vitrine_aba_ativa', abaAtiva)
       localStorage.setItem('vitrine_aba_fila', abaFila)
+      
+      // 👇 SALVA A ESCOLHA DO PROVEDOR SEMPRE QUE VOCÊ CLICA
+      localStorage.setItem('vitrine_provedor_email', provedor)
     }
-  }, [abaAtiva, abaFila, isClient])
+  }, [abaAtiva, abaFila, provedor, isClient])
 
   const verificarSeguranca = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -1103,7 +1111,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* 👇 AQUI ESTÁ O NOVO CAMPO QUE CRIAMOS! 👇 */}
                 <div className="mt-4 p-4 bg-purple-50 border border-purple-100 rounded-xl">
                   <label className="block text-sm font-bold text-purple-900 mb-1">E-mail do Remetente (O que aparece para o lead)</label>
                   <p className="text-xs text-purple-700 mb-3">Este e-mail DEVE estar verificado e autorizado lá dentro do painel smtp.</p>
