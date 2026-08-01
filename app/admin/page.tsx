@@ -58,7 +58,7 @@ export default function AdminPage() {
   
   const [notificacao, setNotificacao] = useState({ mostrar: false, msg: '', tipo: '' })
   const [selecionados, setSelecionados] = useState<string[]>([])
-  const [clientesExpandidos, setClientesExpandidos] = useState<string[]>([]) // Controle da Sanfona
+  const [clientesExpandidos, setClientesExpandidos] = useState<string[]>([]) 
   
   const [assuntoCampanha, setAssuntoCampanha] = useState('')
   const [textoCampanha, setTextoCampanha] = useState('')
@@ -87,8 +87,9 @@ export default function AdminPage() {
   
   const [filtroListaAtual, setFiltroListaAtual] = useState('todos')
 
+  // 👇 NOVA GAVETA ADICIONADA AQUI: smtp_remetente
   const [configEmail, setConfigEmail] = useState({
-    gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: ''
+    gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_remetente: ''
   })
   const [salvandoConfig, setSalvandoConfig] = useState(false)
 
@@ -376,7 +377,7 @@ export default function AdminPage() {
       for (let i = 0; i < lotes.length; i++) {
         for (const cliente of lotes[i]) {
           registrosFila.push({
-            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome, assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,               
+            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome, assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,                
             base_url: window.location.origin, status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
           })
         }
@@ -394,7 +395,6 @@ export default function AdminPage() {
     setEnviandoMassa(false)
   }
 
-  // Lógica de agrupamento por cliente (E-mail) para a nova Interface de Sanfona
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const perfisAgrupadosPorCliente = perfisFiltrados.reduce((acc, perfil) => {
       const emailChave = perfil.email || `sem-email-${perfil.id}`
@@ -1018,7 +1018,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ⚙️ ABA DE CONFIGURAÇÕES (AGORA RESTAURADA 100%) */}
+        {/* ⚙️ ABA DE CONFIGURAÇÕES (AGORA RESTAURADA E COM NOVO CAMPO) */}
         {abaAtiva === 'config' && (
           <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50">
@@ -1056,6 +1056,7 @@ export default function AdminPage() {
 
               <div>
                 <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">SMTP Externo (Lotes Grandes)</h3>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Servidor (Host)</label>
@@ -1078,19 +1079,20 @@ export default function AdminPage() {
                     />
                   </div>
                 </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">E-mail de Disparo (Usuário)</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Credencial (Usuário)</label>
                     <input 
-                      type="text" /* <-- Alterado para TEXT aqui! */
+                      type="text" 
                       value={configEmail.smtp_user || ''} 
                       onChange={e => setConfigEmail({...configEmail, smtp_user: e.target.value})} 
                       className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:border-slate-500" 
-                      placeholder="Usuário ou E-mail" 
+                      placeholder="Usuário de Login" 
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Senha do E-mail</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Senha do Servidor</label>
                     <input 
                       type="password" 
                       value={configEmail.smtp_pass || ''} 
@@ -1100,6 +1102,20 @@ export default function AdminPage() {
                     />
                   </div>
                 </div>
+
+                {/* 👇 AQUI ESTÁ O NOVO CAMPO QUE CRIAMOS! 👇 */}
+                <div className="mt-4 p-4 bg-purple-50 border border-purple-100 rounded-xl">
+                  <label className="block text-sm font-bold text-purple-900 mb-1">E-mail do Remetente (O que aparece para o lead)</label>
+                  <p className="text-xs text-purple-700 mb-3">Este e-mail DEVE estar verificado e autorizado lá dentro do painel da IPZ Marketing/Mailrelay.</p>
+                  <input 
+                    type="email" 
+                    value={configEmail.smtp_remetente || ''} 
+                    onChange={e => setConfigEmail({...configEmail, smtp_remetente: e.target.value})} 
+                    className="w-full p-3 border border-purple-200 rounded-lg outline-none focus:border-purple-500" 
+                    placeholder="ex: suporte@marketingdigitaltop.com.br" 
+                  />
+                </div>
+
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex justify-end">
