@@ -21,7 +21,7 @@ export async function GET() {
     }
 
     let enviados = 0
-    let laudoMedico = null; // O nosso espião
+    let laudoMedico = null; 
 
     for (const item of fila) {
       try {
@@ -34,12 +34,17 @@ export async function GET() {
             port: Number(config.smtp_port),
             secure: Number(config.smtp_port) === 465,
             auth: {
-              user: config.smtp_user,
+              user: config.smtp_user, // Aqui vai o usuário esquisito (ex: qxwkbvebgkvd) para logar
               pass: config.smtp_pass,
             },
             tls: { rejectUnauthorized: false }
           })
-          remetente = config.smtp_user
+          
+          // 👇 AQUI ESTÁ A CORREÇÃO 👇
+          // O remetente passa a ser um e-mail real e formatado, e não o usuário de login!
+          // Se o e-mail que você validou na IPZ Marketing for diferente, altere aqui embaixo:
+          remetente = 'josevg10@gmail.com' 
+          
         } else {
           transporter = nodemailer.createTransport({
             service: 'gmail',
@@ -76,17 +81,15 @@ export async function GET() {
         console.error(`Falha ao enviar para ${item.email}:`, err)
         await supabase.from('fila_envios').update({ status: 'erro' }).eq('id', item.id)
         
-        // CAPTURA O MOTIVO EXATO DA RECUSA DA IPZ MARKETING
         laudoMedico = {
             motivo: err.message,
             codigo_de_erro: err.code,
             comando_rejeitado: err.command
         }
-        break; // Interrompe a fila para jogar o erro na sua tela imediatamente
+        break; 
       }
     }
 
-    // Se o espião capturou um erro, ele joga na tela do navegador!
     if (laudoMedico) {
         return NextResponse.json({ 
             sucesso: false, 
