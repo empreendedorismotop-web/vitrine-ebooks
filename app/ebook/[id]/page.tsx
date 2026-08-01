@@ -2,9 +2,12 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Metadata } from 'next'
 import { redirect } from 'next/navigation'
+import { RastreadorVisita } from '@/components/rastreador' // Puxando o espião silencioso
 
 type Props = {
   params: Promise<{ id: string }> | { id: string }
+  // Adicionando a captura dos parâmetros de busca da URL (A Tagueação)
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined }
 }
 
 // 1. MOTOR DE SEO E LINK PREVIEW
@@ -45,6 +48,10 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 // 2. COMPONENTE DE SERVIDOR
 export default async function ProdutoPage(props: Props) {
   const params = await props.params;
+  const searchParams = await props.searchParams; // Ativa a leitura da URL
+  
+  // Extrai a palavra que estiver escrita em "?origem=..." no link
+  const origem = searchParams?.origem as string || '';
 
   const { data: produto, error } = await supabase
     .from('profiles') 
@@ -81,6 +88,10 @@ export default async function ProdutoPage(props: Props) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
+      
+      {/* 🚀 O RASTREADOR INVISÍVEL ENTRA EM AÇÃO AQUI */}
+      {origem && <RastreadorVisita id={produto.id} origem={origem} />}
+
       <header className="bg-white border-b border-slate-200 py-6 text-center">
         <h1 className="text-2xl font-serif font-bold text-slate-900">Vitrine Digital</h1>
       </header>

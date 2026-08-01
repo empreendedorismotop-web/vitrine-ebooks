@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabase'
 import { useMemo } from 'react'
 
 type TherapistCardProps = {
@@ -13,12 +12,13 @@ type TherapistCardProps = {
     titulo_ebook: string
     imagem_url: string 
     descricao: string
-    link_site: string // Corrigido para bater exatamente com a coluna do banco de dados
+    link_site: string
     cliques?: number
   }
+  origem?: string // 👈 Recebendo a informação de onde o clique veio
 }
 
-export function TherapistCard({ therapist }: TherapistCardProps) {
+export function TherapistCard({ therapist, origem = 'Vitrine Principal (Grade)' }: TherapistCardProps) {
   const router = useRouter()
 
   // O "Cache Buster": força o navegador a buscar a imagem mais recente
@@ -27,31 +27,6 @@ export function TherapistCard({ therapist }: TherapistCardProps) {
     return `${therapist.imagem_url}?v=${new Date().getTime()}`
   }, [therapist.imagem_url])
   
-  const handleRegistrarClique = async () => {
-    try {
-      let origem = 'Vitrine (Página Inicial)'
-      
-      const urlParams = new URLSearchParams(window.location.search)
-      const utmSource = urlParams.get('utm_source')
-
-      if (utmSource) {
-        origem = `Anúncio Vitrine: ${utmSource}`
-      } 
-      else if (document.referrer) {
-        const referrerUrl = new URL(document.referrer)
-        if (referrerUrl.hostname !== window.location.hostname) {
-          origem = `Vitrine via ${referrerUrl.hostname}`
-        }
-      }
-
-      await supabase.from('cliques').insert([
-        { perfil_id: therapist.id, origem: origem }
-      ])
-    } catch (error) {
-      console.error('Erro silencioso ao rastrear clique:', error)
-    }
-  }
-
   return (
     <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-all hover:shadow-xl hover:-translate-y-1">
       
@@ -81,8 +56,8 @@ export function TherapistCard({ therapist }: TherapistCardProps) {
           <Button 
             className="w-full bg-slate-900 text-white hover:bg-slate-800 transition-colors font-bold shadow-md hover:shadow-lg rounded-lg py-5"
             onClick={() => {
-              handleRegistrarClique();
-              router.push(`/ebook/${therapist.id}`);
+              // 👇 Repassa a origem via URL para o rastreador silencioso ler!
+              router.push(`/ebook/${therapist.id}?origem=${origem}`);
             }}
           >
             Mais Detalhes

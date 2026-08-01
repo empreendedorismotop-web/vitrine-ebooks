@@ -8,7 +8,8 @@ import { ChevronRight, ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
 // Mostra 20 por vez (4 fileiras de 5 no PC, ou 20 no carrossel do celular)
 const ITEMS_POR_CARREGAMENTO = 20 
 
-export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
+// 👇 Adicionada a propriedade "origem" para o rastreador
+export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: { searchQuery: string, origem?: string }) {
   const [todosEbooks, setTodosEbooks] = useState<any[]>([])
   const [ebooksVisiveis, setEbooksVisiveis] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -133,7 +134,6 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
         )}
       </div>
 
-      {/* CORREÇÃO AQUI: Mudado de ebooksExibidos para ebooksVisiveis */}
       {ebooksVisiveis.length > 0 ? (
         <div className="relative group">
           
@@ -152,7 +152,8 @@ export function TherapistsSection({ searchQuery }: { searchQuery: string }) {
           >
             {ebooksNaTela.map((ebook) => (
               <div key={ebook.id} className="snap-start shrink-0 w-[80vw] sm:w-[300px] md:w-auto">
-                <TherapistCard therapist={ebook} />
+                {/* 👇 Passando a origem dinamicamente para o cartãozinho */}
+                <TherapistCard therapist={ebook} origem={origem} />
               </div>
             ))}
           </div>

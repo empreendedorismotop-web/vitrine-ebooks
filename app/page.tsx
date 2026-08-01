@@ -127,7 +127,7 @@ export default function HomePage() {
               {ativos.map((ebook) => (
                 <Link 
                   key={ebook.id} 
-                  href={`/ebook/${ebook.id}`} 
+                  href={`/ebook/${ebook.id}?origem=Vitrine Principal (Letreiro)`} 
                   className="text-sm font-bold hover:text-emerald-600 transition-colors flex items-center gap-2"
                 >
                   <span className="text-emerald-500 text-lg leading-none">✦</span> 
@@ -140,7 +140,7 @@ export default function HomePage() {
               {ativos.map((ebook) => (
                 <Link 
                   key={`${ebook.id}-clone`} 
-                  href={`/ebook/${ebook.id}`} 
+                  href={`/ebook/${ebook.id}?origem=Vitrine Principal (Letreiro)`} 
                   className="text-sm font-bold hover:text-emerald-600 transition-colors flex items-center gap-2"
                 >
                   <span className="text-emerald-500 text-lg leading-none">✦</span> 
@@ -198,7 +198,7 @@ export default function HomePage() {
                               <h3 className="font-serif font-bold text-lg text-slate-900 mb-4 line-clamp-2">{vip.titulo_ebook}</h3>
                               
                               <div className="mt-auto">
-                                 <Link href={`/ebook/${vip.id}`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors shadow-sm">
+                                 <Link href={`/ebook/${vip.id}?origem=Vitrine Principal (Carrossel VIP)`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors shadow-sm">
                                     Mais Detalhes
                                  </Link>
                               </div>

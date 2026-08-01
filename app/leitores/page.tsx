@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { ShieldCheck, ChevronRight, ChevronLeft, Crown, Star } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
-import { HeroLeitor } from '@/components/hero-leitor' // Puxando o cabeçalho novo!
+import { HeroLeitor } from '@/components/hero-leitor'
 import { TherapistsSection } from '@/components/therapists-section'
 import { SiteFooter } from '@/components/site-footer'
 import { Button } from '@/components/ui/button'
@@ -104,14 +104,14 @@ export default function LeitoresPage() {
 
             <div className="animacao-letreiro gap-24 px-4">
               {ativos.map((ebook) => (
-                <Link key={ebook.id} href={`/ebook/${ebook.id}`} className="text-sm font-bold hover:text-indigo-600 transition-colors flex items-center gap-2">
+                <Link key={ebook.id} href={`/ebook/${ebook.id}?origem=Página de Leitores (Letreiro)`} className="text-sm font-bold hover:text-indigo-600 transition-colors flex items-center gap-2">
                   <span className="text-indigo-500 text-lg leading-none">✦</span> 
                   {ebook.titulo_ebook} 
                   <span className="text-slate-500 font-normal ml-1">por {ebook.nome}</span>
                 </Link>
               ))}
               {ativos.map((ebook) => (
-                <Link key={`${ebook.id}-clone`} href={`/ebook/${ebook.id}`} className="text-sm font-bold hover:text-indigo-600 transition-colors flex items-center gap-2">
+                <Link key={`${ebook.id}-clone`} href={`/ebook/${ebook.id}?origem=Página de Leitores (Letreiro)`} className="text-sm font-bold hover:text-indigo-600 transition-colors flex items-center gap-2">
                   <span className="text-indigo-500 text-lg leading-none">✦</span> 
                   {ebook.titulo_ebook} 
                   <span className="text-slate-500 font-normal ml-1">por {ebook.nome}</span>
@@ -156,7 +156,7 @@ export default function LeitoresPage() {
                               <h3 className="font-serif font-bold text-lg text-slate-900 mb-4 line-clamp-2">{vip.titulo_ebook}</h3>
                               
                               <div className="mt-auto">
-                                 <Link href={`/ebook/${vip.id}`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors shadow-sm">
+                                 <Link href={`/ebook/${vip.id}?origem=Página de Leitores (Carrossel VIP)`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors shadow-sm">
                                     Mais Detalhes
                                  </Link>
                               </div>
@@ -172,8 +172,8 @@ export default function LeitoresPage() {
             </section>
         )}
 
-        {/* GRADE INTELIGENTE DOS PRODUTOS */}
-        <TherapistsSection searchQuery={searchQuery} />
+        {/* GRADE INTELIGENTE DOS PRODUTOS (Com a Origem Injetada!) */}
+        <TherapistsSection searchQuery={searchQuery} origem="Página de Leitores (Grade)" />
 
         <section className="bg-indigo-50/50 py-12 md:py-16 w-full overflow-hidden border-t border-indigo-100 mt-12">
           <div className="mx-auto flex max-w-4xl flex-col items-center gap-5 px-4 text-center md:px-6">
