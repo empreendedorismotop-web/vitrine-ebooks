@@ -6,7 +6,7 @@ import { TherapistCard } from './therapist-card'
 import { ChevronRight, ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
 
 // Mostra 20 por vez (4 fileiras de 5 no PC, ou 20 no carrossel do celular)
-const ITEMS_POR_CARREGAMENTO = 20 
+const ITEMS_POR_CARREGAMENTO = 40 
 
 // 👇 Adicionada a propriedade "origem" para o rastreador
 export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: { searchQuery: string, origem?: string }) {
