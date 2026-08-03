@@ -18,6 +18,20 @@ export default function CadastroPage() {
     setLoading(true)
     setMensagem('')
 
+    // 🔒 TRAVAS DE SEGURANÇA E OBRIGATORIEDADE
+    if (!email.trim() || !whatsapp.trim() || !nome.trim() || !senha.trim()) {
+      setMensagem('Todos os campos (incluindo E-mail e WhatsApp) são obrigatórios.')
+      setLoading(false)
+      return
+    }
+
+    const apenasNumerosWhats = whatsapp.replace(/\D/g, '')
+    if (apenasNumerosWhats.length < 10) {
+      setMensagem('Por favor, insira um número de WhatsApp válido com DDD.')
+      setLoading(false)
+      return
+    }
+
     // 1. Tenta criar a conta
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -55,7 +69,7 @@ export default function CadastroPage() {
           id: userId, 
           nome, 
           email, 
-          whatsapp,
+          whatsapp, // Salvando o WhatsApp garantido pela trava
           status: 'pendente' 
         }])
 
@@ -99,7 +113,7 @@ export default function CadastroPage() {
 
         <form onSubmit={handleCadastro} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1">Nome do Autor / Produtor</label>
+            <label className="block text-sm font-medium text-slate-900 mb-1">Nome do Autor / Produtor *</label>
             <input 
               type="text" 
               required 
@@ -110,7 +124,7 @@ export default function CadastroPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1">WhatsApp</label>
+            <label className="block text-sm font-medium text-slate-900 mb-1">WhatsApp *</label>
             <input 
               type="text" 
               required 
@@ -121,7 +135,7 @@ export default function CadastroPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1">E-mail</label>
+            <label className="block text-sm font-medium text-slate-900 mb-1">E-mail *</label>
             <input 
               type="email" 
               required 
@@ -132,7 +146,7 @@ export default function CadastroPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-1">Senha</label>
+            <label className="block text-sm font-medium text-slate-900 mb-1">Senha *</label>
             <input 
               type="password" 
               required 

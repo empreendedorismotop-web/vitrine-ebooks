@@ -441,8 +441,14 @@ export default function AdminPage() {
     return true
   })
 
-  const clientesComWhatsapp = perfis.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
-  const clientesWhatsAppFiltrados = clientesComWhatsapp.filter(p => {
+  // 1. Pega todo mundo que tem whats e passa no filtro de lista
+  const clientesComWhatsappRaw = perfis.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
+
+  // 2. O FILTRO ANTI-DUPLICADOS (Remove contatos com o mesmo número)
+  const clientesUnicosWhats = Array.from(new Map(clientesComWhatsappRaw.map(p => [p.telefone!.replace(/\D/g, ''), p])).values())
+
+  // 3. Aplica o filtro de enviados/não enviados na lista única
+  const clientesWhatsAppFiltrados = clientesUnicosWhats.filter(p => {
     if (filtroWhats === 'todos') return true
     if (filtroWhats === 'enviados') return p.ultimo_whats_enviado != null
     if (filtroWhats === 'nao_enviados') return p.ultimo_whats_enviado == null
