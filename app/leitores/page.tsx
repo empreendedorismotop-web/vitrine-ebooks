@@ -92,14 +92,12 @@ export default function LeitoresPage() {
                 100% { transform: translateX(-100%); }
               }
               .animacao-letreiro {
-                display: inline-flex;
-                white-space: nowrap;
-                animation: letreiro 40s linear infinite;
-                padding-right: 50px;
-              }
-              .animacao-letreiro:hover {
-                animation-play-state: paused;
-              }
+    display: inline-flex;
+    white-space: nowrap;
+    /* Calcula 6 segundos para cada e-book ativo, mantendo a velocidade sempre igual! */
+    animation: letreiro ${ativos.length * 6}s linear infinite;
+    padding-right: 50px;
+  }
             `}</style>
 
             <div className="animacao-letreiro gap-24 px-4">
