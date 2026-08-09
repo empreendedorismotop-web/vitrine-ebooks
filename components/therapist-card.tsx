@@ -60,6 +60,9 @@ export function TherapistCard({ therapist, origem = 'Vitrine Principal (Grade)' 
     setFavCount(newCount)
     localStorage.setItem('@vitrine-favoritos', JSON.stringify(currentFavs))
 
+    // 👇 O AVISO INVISÍVEL: Atualiza a bolinha vermelha do cabeçalho na mesma hora!
+    window.dispatchEvent(new Event('favoritosAtualizados'))
+
     // Atualiza o banco do Admin silenciosamente
     await supabase.from('profiles').update({ favoritos_count: newCount }).eq('id', therapist.id)
   }

@@ -86,7 +86,7 @@ export default function LeitoresPage() {
 
     if (isFavorito) {
       // Remove dos favoritos
-      novaListaFavoritos = favoritos.filter(id => id !== ebook.id)
+      novaListaFavoritos = favoritos.filter((id: string) => id !== ebook.id)
       novoCount = Math.max(0, novoCount - 1)
     } else {
       // Adiciona aos favoritos
@@ -98,6 +98,9 @@ export default function LeitoresPage() {
     setFavoritos(novaListaFavoritos)
     localStorage.setItem('@vitrine-favoritos', JSON.stringify(novaListaFavoritos))
     
+    // 👇 O AVISO INVISÍVEL: Atualiza a bolinha vermelha do cabeçalho na mesma hora!
+    window.dispatchEvent(new Event('favoritosAtualizados'))
+
     // Atualiza o estado da array de VIPs visualmente
     setVips(prevVips => prevVips.map(v => v.id === ebook.id ? { ...v, favoritos_count: novoCount } : v))
 

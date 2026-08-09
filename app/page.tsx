@@ -102,6 +102,9 @@ export default function HomePage() {
     setFavoritos(novaListaFavoritos)
     localStorage.setItem('@vitrine-favoritos', JSON.stringify(novaListaFavoritos))
     
+    // 👇 O AVISO INVISÍVEL: Atualiza a bolinha vermelha do cabeçalho na mesma hora!
+    window.dispatchEvent(new Event('favoritosAtualizados'))
+
     // Atualiza o estado da array de VIPs visualmente
     setVips(prevVips => prevVips.map(v => v.id === ebook.id ? { ...v, favoritos_count: novoCount } : v))
 
@@ -211,7 +214,7 @@ export default function HomePage() {
                            
                            {/* Botão de Favorito no Canto Superior Esquerdo */}
                            <button 
-                             onClick={() => toggleFavorito(vip)}
+                             onClick={(e) => { e.preventDefault(); toggleFavorito(vip); }}
                              className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm p-2 rounded-full z-20 shadow-sm hover:scale-110 transition-transform group/fav"
                              title="Salvar nos favoritos"
                            >

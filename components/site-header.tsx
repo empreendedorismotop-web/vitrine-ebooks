@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { BookOpen } from 'lucide-react'
+import { MenuFavoritos } from './menu-favoritos'
 
 export function SiteHeader() {
   const pathname = usePathname()
@@ -26,7 +27,7 @@ export function SiteHeader() {
         </Link>
 
         {/* NAVEGAÇÃO E BOTÕES */}
-        <nav className="flex items-center gap-4 md:gap-6">
+        <nav className="flex items-center gap-3 md:gap-6">
           <Link 
             href="/como-funciona" 
             className="text-sm font-bold text-slate-600 hover:text-primary transition-colors hidden sm:block"
@@ -36,10 +37,13 @@ export function SiteHeader() {
 
           <Link 
             href="/planos" 
-            className="text-sm font-bold text-slate-600 hover:text-primary transition-colors"
+            className="text-sm font-bold text-slate-600 hover:text-primary transition-colors hidden sm:block"
           >
             Planos
           </Link>
+
+          {/* 👇 GAVETA DE FAVORITOS (CORAÇÃO MAGICO AQUI) 👇 */}
+          <MenuFavoritos />
           
           <Link 
             href="/login" 
