@@ -121,6 +121,11 @@ export default function LeitoresPage() {
             <HeroLeitor query={searchQuery} onQueryChange={setSearchQuery} />
         </div>
 
+        {/* 👇 O NOVO BANNER CAPTADOR DE LEADS AGORA FICA NO TOPO 👇 */}
+        <div className="mt-8 border-b border-slate-100 pb-4">
+          <BannerPush />
+        </div>
+
         {/* --- FAIXA JORNALÍSTICA (LETREIRO SUAVE) --- */}
         {ativos.length > 0 && (
           <div className="w-full bg-slate-100 text-slate-800 overflow-hidden relative flex items-center py-3 mb-10 border-y border-slate-200 shadow-sm mt-8">

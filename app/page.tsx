@@ -124,6 +124,11 @@ export default function HomePage() {
         <div className="-mt-8 md:-mt-12">
             <Hero query={searchQuery} onQueryChange={setSearchQuery} />
         </div>
+
+        {/* 👇 O NOVO BANNER CAPTADOR DE LEADS AGORA FICA NO TOPO 👇 */}
+        <div className="mt-8 border-b border-slate-100 pb-4">
+          <BannerPush />
+        </div>
         
         <section className="w-full flex justify-center px-4 -mt-8 md:-mt-12 mb-10 relative z-20">
             <Link 
