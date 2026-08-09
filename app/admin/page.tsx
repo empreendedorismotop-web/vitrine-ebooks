@@ -24,7 +24,7 @@ type Perfil = {
   imagem_url?: string
   cliques?: Clique[]
   posicao_fixa?: number | null 
-  favoritos_count?: number // NOVO: Campo de Favoritos para o Admin visualizar
+  favoritos_count?: number 
 }
 
 type FilaItem = {
@@ -53,6 +53,7 @@ export default function AdminPage() {
 
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [fila, setFila] = useState<FilaItem[]>([]) 
+  const [inscritosPush, setInscritosPush] = useState<any[]>([]) // NOVO: Controle de inscritos no Push
   
   const [abaAtiva, setAbaAtiva] = useState('pendente')
   const [abaFila, setAbaFila] = useState('pendente') 
@@ -70,6 +71,13 @@ export default function AdminPage() {
   const [tamanhoLote, setTamanhoLote] = useState(2) 
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
+
+  // NOVOS ESTADOS PARA O PUSH
+  const [pushTitulo, setPushTitulo] = useState('Novidade na Vitrine!')
+  const [pushMensagem, setPushMensagem] = useState('')
+  const [pushUrl, setPushUrl] = useState('https://vitrine-ebooks.vercel.app')
+  const [enviandoPush, setEnviandoPush] = useState(false)
+  const [progressoPush, setProgressoPush] = useState({ enviados: 0, total: 0 })
 
   const [filtroWhats, setFiltroWhats] = useState<'todos' | 'nao_enviados' | 'enviados'>('todos')
   const [filtroEmailMassa, setFiltroEmailMassa] = useState<'todos' | 'nao_enviados' | 'enviados'>('todos')
@@ -124,8 +132,60 @@ export default function AdminPage() {
     carregarPerfis()
     carregarFila()
     carregarConfiguracoes()
+    carregarInscritosPush() // Busca a galera do Push
     const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
+  }
+
+  // BUSCA OS APARELHOS INSCRITOS PARA RECEBER PUSH
+  const carregarInscritosPush = async () => {
+    const { data } = await supabase.from('push_subscriptions').select('*')
+    if (data) setInscritosPush(data)
+  }
+
+  // MOTOR DE DISPARO DE PUSH EM LOTES (Anti-Travamento)
+  const dispararPushEmMassa = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (inscritosPush.length === 0) return mostrarNotificacao('Ninguém inscrito ainda.', 'erro')
+    
+    setEnviandoPush(true)
+    setProgressoPush({ enviados: 0, total: inscritosPush.length })
+    
+    const maxPorLote = 50 // Envia de 50 em 50 para não estourar a Vercel
+    let totalEnviadosAgora = 0
+
+    for (let i = 0; i < inscritosPush.length; i += maxPorLote) {
+      const lote = inscritosPush.slice(i, i + maxPorLote)
+      
+      try {
+        await fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscriptions: lote,
+            payload: {
+              title: pushTitulo,
+              body: pushMensagem,
+              url: pushUrl
+            }
+          })
+        })
+        
+        totalEnviadosAgora += lote.length
+        setProgressoPush({ enviados: totalEnviadosAgora, total: inscritosPush.length })
+        
+        // Espera 1.5 segundos antes de enviar o próximo lote
+        if (i + maxPorLote < inscritosPush.length) {
+          await new Promise(resolve => setTimeout(resolve, 1500))
+        }
+      } catch (error) {
+        console.error('Erro no lote do Push:', error)
+      }
+    }
+    
+    mostrarNotificacao(`Sucesso! Notificações enviadas para ${totalEnviadosAgora} aparelhos.`, 'sucesso')
+    setEnviandoPush(false)
+    setPushMensagem('')
   }
 
   const carregarConfiguracoes = async () => {
@@ -252,7 +312,6 @@ export default function AdminPage() {
     }
   }
 
-  // ATUALIZADO: Exportação de CSV incluindo Favoritos
   const baixarCSV = () => {
     const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Favoritos', 'Posição VIP', 'Data de Cadastro', 'Lista']
     const linhas = perfis.map(p => [
@@ -647,7 +706,61 @@ export default function AdminPage() {
           </button>
           <button onClick={() => setAbaAtiva('campanhas')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'campanhas' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 border'}`}>📧 E-mail Massa</button>
           <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
+
+          {/* NOVO BOTÃO: NOTIFICAÇÕES PUSH */}
+          <button onClick={() => setAbaAtiva('push')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'push' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}>🔔 Notificações Push</button>
         </div>
+
+        {/* 🔔 ABA DE NOTIFICAÇÕES PUSH */}
+        {abaAtiva === 'push' && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Disparo de Notificações</h2>
+                <p className="text-sm text-slate-500 mt-1">Envie alertas diretos para o celular e computador dos assinantes.</p>
+              </div>
+              <div className="bg-orange-50 border border-orange-200 text-orange-800 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
+                📱 {inscritosPush.length} Dispositivos Inscritos
+              </div>
+            </div>
+
+            <form onSubmit={dispararPushEmMassa} className="space-y-4 max-w-3xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Título da Notificação *</label>
+                  <input type="text" required value={pushTitulo} onChange={e => setPushTitulo(e.target.value)} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg outline-none focus:border-orange-500" placeholder="Ex: Novo E-book na Vitrine!" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Link de Destino *</label>
+                  <input type="url" required value={pushUrl} onChange={e => setPushUrl(e.target.value)} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg outline-none focus:border-orange-500" placeholder="https://..." />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Mensagem *</label>
+                <textarea required rows={3} value={pushMensagem} onChange={e => setPushMensagem(e.target.value)} className="w-full p-3 border border-slate-200 bg-slate-50 rounded-lg outline-none focus:border-orange-500" placeholder="O que você quer contar para os assinantes?" />
+              </div>
+
+              <div className="pt-4">
+                {enviandoPush ? (
+                  <div className="w-full bg-slate-100 rounded-lg p-4 border border-slate-200">
+                    <div className="flex justify-between text-sm font-bold text-slate-700 mb-2">
+                      <span>Enviando em lotes (Proteção Anti-Travamento)...</span>
+                      <span>{progressoPush.enviados} de {progressoPush.total}</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-2.5">
+                      <div className="bg-orange-500 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(progressoPush.enviados / progressoPush.total) * 100}%` }}></div>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="submit" disabled={inscritosPush.length === 0} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold p-4 rounded-xl shadow-md transition-colors disabled:opacity-50">
+                    🚀 Disparar Notificação para {inscritosPush.length} Aparelhos
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* 📋 ABAS PENDENTE / ATIVO / INATIVO (COM NOVA SANFONA E EXIBIÇÃO DE FAVORITOS) */}
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
