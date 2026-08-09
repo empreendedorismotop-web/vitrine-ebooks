@@ -24,6 +24,7 @@ type Perfil = {
   imagem_url?: string
   cliques?: Clique[]
   posicao_fixa?: number | null 
+  favoritos_count?: number // NOVO: Campo de Favoritos para o Admin visualizar
 }
 
 type FilaItem = {
@@ -101,7 +102,6 @@ export default function AdminPage() {
       const filaSalva = localStorage.getItem('vitrine_aba_fila')
       if (filaSalva) setAbaFila(filaSalva)
       
-      // 👇 A MÁGICA DA BOLINHA FIXA AQUI
       const provedorSalvo = localStorage.getItem('vitrine_provedor_email')
       if (provedorSalvo) setProvedor(provedorSalvo)
 
@@ -113,8 +113,6 @@ export default function AdminPage() {
     if (isClient) {
       localStorage.setItem('vitrine_aba_ativa', abaAtiva)
       localStorage.setItem('vitrine_aba_fila', abaFila)
-      
-      // 👇 SALVA A ESCOLHA DO PROVEDOR SEMPRE QUE VOCÊ CLICA
       localStorage.setItem('vitrine_provedor_email', provedor)
     }
   }, [abaAtiva, abaFila, provedor, isClient])
@@ -172,7 +170,7 @@ export default function AdminPage() {
         id: crypto.randomUUID(), nome: 'Lead Importado',
         email: isEmail ? linha : `sem-email-${crypto.randomUUID().substring(0,6)}@importado.com`,
         telefone: isEmail ? null : linha, titulo_ebook: nomeDaListaFinal, link_site: 'https://vitrine-ebooks.vercel.app',
-        plano_selecionado: 'Importado', status: 'inativo' 
+        plano_selecionado: 'Importado', status: 'inativo', favoritos_count: 0
       })
     }
 
@@ -254,11 +252,12 @@ export default function AdminPage() {
     }
   }
 
+  // ATUALIZADO: Exportação de CSV incluindo Favoritos
   const baixarCSV = () => {
-    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Posição VIP', 'Data de Cadastro', 'Lista']
+    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Favoritos', 'Posição VIP', 'Data de Cadastro', 'Lista']
     const linhas = perfis.map(p => [
         `"${p.nome || ''}"`, `"${p.email || ''}"`, `"${p.telefone || ''}"`, `"${p.status || ''}"`, `"${p.plano_selecionado || ''}"`,
-        `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`, `"${p.cliques?.length || 0}"`,
+        `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`, `"${p.cliques?.length || 0}"`, `"${p.favoritos_count || 0}"`,
         `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`, `"${p.plano_selecionado === 'Importado' ? p.titulo_ebook : 'Orgânico'}"`
     ])
     const conteudo = [cabecalho, ...linhas].map(e => e.join(',')).join('\n')
@@ -441,13 +440,8 @@ export default function AdminPage() {
     return true
   })
 
-  // 1. Pega todo mundo que tem whats e passa no filtro de lista
   const clientesComWhatsappRaw = perfis.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
-
-  // 2. O FILTRO ANTI-DUPLICADOS (Remove contatos com o mesmo número)
   const clientesUnicosWhats = Array.from(new Map(clientesComWhatsappRaw.map(p => [p.telefone!.replace(/\D/g, ''), p])).values())
-
-  // 3. Aplica o filtro de enviados/não enviados na lista única
   const clientesWhatsAppFiltrados = clientesUnicosWhats.filter(p => {
     if (filtroWhats === 'todos') return true
     if (filtroWhats === 'enviados') return p.ultimo_whats_enviado != null
@@ -655,7 +649,7 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
         </div>
 
-        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO (COM NOVA SANFONA) */}
+        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO (COM NOVA SANFONA E EXIBIÇÃO DE FAVORITOS) */}
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             {listaClientesAgrupados.length === 0 ? (
@@ -693,17 +687,24 @@ export default function AdminPage() {
                            <div key={perfil.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col md:flex-row justify-between gap-4 items-center">
                              
                              <div className="flex-1 min-w-0 w-full">
-                               {/* O Título do E-book agora é o grande destaque aqui dentro! */}
-                               <h4 className="font-bold text-slate-900 text-lg truncate mb-1">📖 {perfil.titulo_ebook}</h4>
+                               {/* Título e Tag de Favoritos */}
+                               <div className="flex items-center gap-3 mb-1">
+                                 <h4 className="font-bold text-slate-900 text-lg truncate">📖 {perfil.titulo_ebook}</h4>
+                                 {perfil.favoritos_count ? (
+                                    <span className="bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                                      ❤️ {perfil.favoritos_count}
+                                    </span>
+                                 ) : null}
+                               </div>
                                
-                               <div className="flex flex-wrap items-center gap-2 mb-3">
+                               <div className="flex flex-wrap items-center gap-2 mb-3 mt-1">
                                  {perfil.telefone && (
                                    <a href={formatarLinkWhatsApp(perfil.telefone)} target="_blank" rel="noopener noreferrer" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors flex items-center gap-1 shrink-0">
-                                     💬 Whats
+                                      💬 Whats
                                    </a>
                                  )}
                                  <p className="text-sm text-blue-600 hover:underline truncate max-w-xs md:max-w-md" title={perfil.link_site}>
-                                    🔗 {perfil.link_site || 'Link não informado'}
+                                   🔗 {perfil.link_site || 'Link não informado'}
                                  </p>
                                </div>
 
@@ -1032,7 +1033,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ⚙️ ABA DE CONFIGURAÇÕES (AGORA RESTAURADA E COM NOVO CAMPO) */}
+        {/* ⚙️ ABA DE CONFIGURAÇÕES */}
         {abaAtiva === 'config' && (
           <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50">

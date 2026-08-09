@@ -5,10 +5,9 @@ import { supabase } from '@/lib/supabase'
 import { TherapistCard } from './therapist-card'
 import { ChevronRight, ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
 
-// Mostra 20 por vez (4 fileiras de 5 no PC, ou 20 no carrossel do celular)
+// Mostra 40 por vez
 const ITEMS_POR_CARREGAMENTO = 40 
 
-// 👇 Adicionada a propriedade "origem" para o rastreador
 export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: { searchQuery: string, origem?: string }) {
   const [todosEbooks, setTodosEbooks] = useState<any[]>([])
   const [ebooksVisiveis, setEbooksVisiveis] = useState<any[]>([])
@@ -152,8 +151,10 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
           >
             {ebooksNaTela.map((ebook) => (
               <div key={ebook.id} className="snap-start shrink-0 w-[80vw] sm:w-[300px] md:w-auto">
-                {/* 👇 Passando a origem dinamicamente para o cartãozinho */}
+                
+                {/* O Cartão Inteligente agora resolve tudo sozinho (Favoritos, Cliques, Redirecionamento) */}
                 <TherapistCard therapist={ebook} origem={origem} />
+              
               </div>
             ))}
           </div>

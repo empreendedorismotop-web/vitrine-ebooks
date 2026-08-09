@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { ShieldCheck, ChevronRight, ChevronLeft, Crown, Star } from 'lucide-react'
+import { ShieldCheck, ChevronRight, ChevronLeft, Crown, Star, Heart } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { Hero } from '@/components/hero'
 import { TherapistsSection } from '@/components/therapists-section'
@@ -14,10 +14,17 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [vips, setVips] = useState<any[]>([])
   const [ativos, setAtivos] = useState<any[]>([]) 
+  const [favoritos, setFavoritos] = useState<string[]>([])
   
   const carouselRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Carrega os favoritos salvos no navegador do usuário
+    const favoritosSalvos = localStorage.getItem('@vitrine-favoritos')
+    if (favoritosSalvos) {
+      setFavoritos(JSON.parse(favoritosSalvos))
+    }
+
     const carregarDados = async () => {
       // 1. Busca APENAS os VIPs para o Carrossel
       const { data: dataVips } = await supabase
@@ -36,8 +43,7 @@ export default function HomePage() {
         .eq('status', 'ativo')
       
       if (dataAtivos) {
-        // LÓGICA INTELIGENTE: Embaralha a ordem aleatoriamente no cliente (celular/PC do visitante)
-        // Isso garante que todos tenham a mesma chance de aparecer primeiro a cada F5
+        // Embaralha a ordem aleatoriamente
         const listaEmbaralhada = dataAtivos.sort(() => Math.random() - 0.5)
         setAtivos(listaEmbaralhada)
       }
@@ -76,17 +82,45 @@ export default function HomePage() {
     }
   }
 
+  // Lógica Híbrida de Favoritos (Local + Supabase)
+  const toggleFavorito = async (ebook: any) => {
+    const isFavorito = favoritos.includes(ebook.id)
+    let novaListaFavoritos = []
+    let novoCount = (ebook.favoritos_count || 0)
+
+    if (isFavorito) {
+      // Remove dos favoritos
+      novaListaFavoritos = favoritos.filter(id => id !== ebook.id)
+      novoCount = Math.max(0, novoCount - 1)
+    } else {
+      // Adiciona aos favoritos
+      novaListaFavoritos = [...favoritos, ebook.id]
+      novoCount += 1
+    }
+
+    // 1. Atualiza a interface instantaneamente (Local)
+    setFavoritos(novaListaFavoritos)
+    localStorage.setItem('@vitrine-favoritos', JSON.stringify(novaListaFavoritos))
+    
+    // Atualiza o estado da array de VIPs visualmente
+    setVips(prevVips => prevVips.map(v => v.id === ebook.id ? { ...v, favoritos_count: novoCount } : v))
+
+    // 2. Atualiza o banco de dados silenciosamente
+    await supabase
+      .from('profiles')
+      .update({ favoritos_count: novoCount })
+      .eq('id', ebook.id)
+  }
+
   return (
     <>
       <SiteHeader />
       <main className="overflow-hidden bg-slate-50 relative z-10">
         
-        {/* Envoltório puxando o componente Hero para cima para reduzir o espaço em branco */}
         <div className="-mt-8 md:-mt-12">
             <Hero query={searchQuery} onQueryChange={setSearchQuery} />
         </div>
         
-        {/* BOTAO ESTRATEGICO DE CADASTRO */}
         <section className="w-full flex justify-center px-4 -mt-8 md:-mt-12 mb-10 relative z-20">
             <Link 
               href="/cadastro" 
@@ -97,11 +131,9 @@ export default function HomePage() {
             </Link>
         </section>
 
-        {/* --- NOVA FAIXA JORNALÍSTICA (LETREIRO SUAVE E EMBARALHADO) --- */}
         {ativos.length > 0 && (
           <div className="w-full bg-slate-100 text-slate-800 overflow-hidden relative flex items-center py-3 mb-10 border-y border-slate-200 shadow-sm">
             
-            {/* Gradientes laterais com a cor clara */}
             <div className="absolute left-0 z-10 w-16 h-full bg-gradient-to-r from-slate-100 to-transparent pointer-events-none"></div>
             <div className="absolute right-0 z-10 w-16 h-full bg-gradient-to-l from-slate-100 to-transparent pointer-events-none"></div>
             
@@ -111,20 +143,17 @@ export default function HomePage() {
                 100% { transform: translateX(-100%); }
               }
               .animacao-letreiro {
-    display: inline-flex;
-    white-space: nowrap;
-    /* Calcula 6 segundos para cada e-book ativo, mantendo a velocidade sempre igual! */
-    animation: letreiro ${ativos.length * 6}s linear infinite;
-    padding-right: 50px;
-  }
+                display: inline-flex;
+                white-space: nowrap;
+                animation: letreiro ${ativos.length * 6}s linear infinite;
+                padding-right: 50px;
+              }
               .animacao-letreiro:hover {
                 animation-play-state: paused;
               }
             `}</style>
 
-            {/* Gap bem largo para esconder a cópia quando a lista é muito pequena */}
             <div className="animacao-letreiro gap-24 px-4">
-              {/* Primeira renderização (Embaralhada) */}
               {ativos.map((ebook) => (
                 <Link 
                   key={ebook.id} 
@@ -137,7 +166,6 @@ export default function HomePage() {
                 </Link>
               ))}
               
-              {/* Cópia Invisível para o Loop Infinito funcionar */}
               {ativos.map((ebook) => (
                 <Link 
                   key={`${ebook.id}-clone`} 
@@ -153,7 +181,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* CARROSSEL DE DESTAQUES VIP */}
         {vips.length > 0 && (
             <section className="max-w-7xl mx-auto px-4 md:px-6 mb-12">
                <div className="flex items-center gap-3 mb-6 border-b border-slate-200 pb-4">
@@ -182,6 +209,17 @@ export default function HomePage() {
                     {vips.map(vip => (
                         <div key={vip.id} className="snap-start shrink-0 w-[280px] md:w-[320px] bg-white rounded-2xl shadow-sm border border-amber-200 overflow-hidden flex flex-col relative transition-all hover:shadow-md hover:border-amber-300">
                            
+                           {/* Botão de Favorito no Canto Superior Esquerdo */}
+                           <button 
+                             onClick={() => toggleFavorito(vip)}
+                             className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm p-2 rounded-full z-20 shadow-sm hover:scale-110 transition-transform group/fav"
+                             title="Salvar nos favoritos"
+                           >
+                             <Heart 
+                               className={`size-5 transition-colors duration-300 ${favoritos.includes(vip.id) ? 'fill-red-500 text-red-500' : 'text-slate-400 group-hover/fav:text-red-400'}`} 
+                             />
+                           </button>
+
                            <div className="absolute top-3 right-3 bg-amber-400 text-amber-950 text-[10px] font-bold px-2 py-1 rounded-md z-10 shadow-sm flex items-center gap-1">
                               <Star className="size-3 fill-amber-950" /> DESTAQUE
                            </div>
@@ -195,7 +233,14 @@ export default function HomePage() {
                            </div>
                            
                            <div className="p-5 flex flex-col flex-1 border-t border-slate-100">
-                              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 line-clamp-1">POR {vip.nome}</p>
+                              <div className="flex justify-between items-center mb-2">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider line-clamp-1">POR {vip.nome}</p>
+                                {vip.favoritos_count > 0 && (
+                                  <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                                    <Heart className="size-3 fill-red-500" /> {vip.favoritos_count}
+                                  </span>
+                                )}
+                              </div>
                               <h3 className="font-serif font-bold text-lg text-slate-900 mb-4 line-clamp-2">{vip.titulo_ebook}</h3>
                               
                               <div className="mt-auto">
