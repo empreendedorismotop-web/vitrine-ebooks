@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TherapistCard } from './therapist-card'
 import { ChevronRight, ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
+import { BannerPush } from '@/components/banner-push' // 👈 Importamos o Banner Mágico aqui!
 
 // Mostra 40 por vez
 const ITEMS_POR_CARREGAMENTO = 40 
@@ -190,6 +191,11 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
           </button>
         </div>
       )}
+
+      {/* 👇 O BANNER DE NOTIFICAÇÕES (Some automaticamente se o usuário aceitar) 👇 */}
+      <div className="mt-4 border-t border-slate-100 pt-8">
+        <BannerPush />
+      </div>
 
     </section>
   )

@@ -1,5 +1,6 @@
 'use client'
 
+import { BannerPush } from '@/components/banner-push'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { ShieldCheck, ChevronRight, ChevronLeft, Crown, Star, Heart } from 'lucide-react'
