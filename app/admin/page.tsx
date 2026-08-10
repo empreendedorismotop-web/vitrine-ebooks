@@ -50,9 +50,9 @@ export default function AdminPage() {
 
   // Estados dos Leads do Exit Popup
   const [leadsExit, setLeadsExit] = useState<any[]>([])
-  const [filtroSegmentoLead, setFiltroSegmentoLead] = useState('todos') // 'todos', 'leitor', 'autor'
+  const [filtroSegmentoLead, setFiltroSegmentoLead] = useState('todos')
 
-  // ⚠️ ESTADOS DE CONFIGURAÇÃO DOS POPUPS (NOVO) ⚠️
+  // Estados de Configuração dos Popups
   const [popupLeitor, setPopupLeitor] = useState({
     titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: ''
   })
@@ -85,7 +85,6 @@ export default function AdminPage() {
   const [intervaloLote, setIntervaloLote] = useState(1) 
   const [enviandoMassa, setEnviandoMassa] = useState(false)
 
-  // NOVOS ESTADOS PARA O PUSH
   const [pushTitulo, setPushTitulo] = useState('Novidade na Vitrine!')
   const [pushMensagem, setPushMensagem] = useState('')
   const [pushUrl, setPushUrl] = useState('https://vitrine-ebooks.vercel.app')
@@ -135,7 +134,6 @@ export default function AdminPage() {
     if (data) setLeadsExit(data)
   }
 
-  // ⚠️ NOVA FUNÇÃO: CARREGA OS POPUPS ⚠️
   const carregarPopups = async () => {
     try {
       const { data, error } = await supabase.from('popup_configs').select('*')
@@ -151,7 +149,6 @@ export default function AdminPage() {
     }
   }
 
-  // ⚠️ NOVA FUNÇÃO: SALVA OS POPUPS ⚠️
   const salvarPopup = async (segmento: string, dados: any) => {
     setSalvandoPopup(true)
     try {
@@ -181,7 +178,7 @@ export default function AdminPage() {
     carregarConfiguracoes()
     carregarInscritosPush() 
     carregarLeadsExit()
-    carregarPopups() // Busca as configs dos popups
+    carregarPopups() 
     const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
   }
@@ -210,11 +207,7 @@ export default function AdminPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             subscriptions: lote,
-            payload: {
-              title: pushTitulo,
-              body: pushMensagem,
-              url: pushUrl
-            }
+            payload: { title: pushTitulo, body: pushMensagem, url: pushUrl }
           })
         })
         
@@ -224,9 +217,7 @@ export default function AdminPage() {
         if (i + maxPorLote < inscritosPush.length) {
           await new Promise(resolve => setTimeout(resolve, 1500))
         }
-      } catch (error) {
-        console.error('Erro no lote do Push:', error)
-      }
+      } catch (error) { console.error('Erro no lote do Push:', error) }
     }
     
     mostrarNotificacao(`Sucesso! Notificações enviadas para ${totalEnviadosAgora} aparelhos.`, 'sucesso')
@@ -327,34 +318,50 @@ export default function AdminPage() {
     return base
   }
 
+  // ⚠️ ATUALIZADO: Salva o clique no Whats na tabela certa (Profile ou Lead)
   const marcarWhatsAppEnviado = async (id: string) => {
     const agora = new Date().toISOString()
-    const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: agora }).eq('id', id)
-    if (!error) carregarPerfis()
-  }
-
-  const resetarEnviosWhatsApp = async () => {
-    if (confirm('Zerar o histórico do WhatsApp para esta lista?')) {
-      const idsParaLimpar = clientesWhatsAppFiltrados.filter(p => p.ultimo_whats_enviado != null).map(p => p.id)
-      if (idsParaLimpar.length === 0) return mostrarNotificacao('Nenhum histórico para limpar.', 'sucesso')
-      const { error } = await supabase.from('profiles').update({ ultimo_whats_enviado: null }).in('id', idsParaLimpar)
-      if (error) mostrarNotificacao('Erro ao zerar lista.', 'erro')
-      else { mostrarNotificacao('Histórico zerado!', 'sucesso'); carregarPerfis() }
+    if (id.startsWith('lead_')) {
+      const emailReal = id.replace('lead_', '')
+      await supabase.from('leads').update({ ultimo_whats_enviado: agora }).eq('email', emailReal)
+      carregarLeadsExit()
+    } else {
+      await supabase.from('profiles').update({ ultimo_whats_enviado: agora }).eq('id', id)
+      carregarPerfis()
     }
   }
 
+  // ⚠️ ATUALIZADO: Limpa o histórico nas duas tabelas
+  const resetarEnviosWhatsApp = async () => {
+    if (confirm('Zerar o histórico do WhatsApp para esta lista?')) {
+      const clientesParaLimpar = clientesWhatsAppFiltrados.filter(p => p.ultimo_whats_enviado != null)
+      if (clientesParaLimpar.length === 0) return mostrarNotificacao('Nenhum histórico para limpar.', 'sucesso')
+      
+      const idsProfiles = clientesParaLimpar.filter(p => !p.id.startsWith('lead_')).map(p => p.id)
+      const emailsLeads = clientesParaLimpar.filter(p => p.id.startsWith('lead_')).map(p => p.email)
+
+      if (idsProfiles.length > 0) await supabase.from('profiles').update({ ultimo_whats_enviado: null }).in('id', idsProfiles)
+      if (emailsLeads.length > 0) await supabase.from('leads').update({ ultimo_whats_enviado: null }).in('email', emailsLeads)
+      
+      mostrarNotificacao('Histórico zerado!', 'sucesso')
+      carregarPerfis(); carregarLeadsExit()
+    }
+  }
+
+  // ⚠️ ATUALIZADO: Limpa o histórico nas duas tabelas
   const resetarEnviosEmail = async () => {
     if (confirm('Zerar o histórico de E-MAIL para esta lista? Eles voltarão para "Falta Enviar".')) {
-      const idsParaLimpar = clientesComEmailParaMassa.filter(p => p.ultimo_email_enviado != null).map(p => p.id)
-      if (idsParaLimpar.length === 0) return mostrarNotificacao('Nenhum histórico para limpar.', 'sucesso')
+      const clientesParaLimpar = clientesComEmailParaMassa.filter(p => p.ultimo_email_enviado != null)
+      if (clientesParaLimpar.length === 0) return mostrarNotificacao('Nenhum histórico para limpar.', 'sucesso')
       
-      const { error } = await supabase.from('profiles').update({ ultimo_email_enviado: null }).in('id', idsParaLimpar)
-      if (error) mostrarNotificacao('Erro ao zerar lista.', 'erro')
-      else { 
-        mostrarNotificacao('Histórico de e-mail zerado!', 'sucesso'); 
-        setSelecionados([]); 
-        carregarPerfis(); 
-      }
+      const idsProfiles = clientesParaLimpar.filter(p => !p.id.startsWith('lead_')).map(p => p.id)
+      const emailsLeads = clientesParaLimpar.filter(p => p.id.startsWith('lead_')).map(p => p.email)
+
+      if (idsProfiles.length > 0) await supabase.from('profiles').update({ ultimo_email_enviado: null }).in('id', idsProfiles)
+      if (emailsLeads.length > 0) await supabase.from('leads').update({ ultimo_email_enviado: null }).in('email', emailsLeads)
+      
+      mostrarNotificacao('Histórico de e-mail zerado!', 'sucesso')
+      setSelecionados([]); carregarPerfis(); carregarLeadsExit()
     }
   }
 
@@ -472,6 +479,7 @@ export default function AdminPage() {
     }
   }
 
+  // ⚠️ ATUALIZADO: Registra o envio em massa tanto na tabela de leads quanto na de profiles
   const dispararCampanhaMassa = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selecionados.length === 0) return mostrarNotificacao('Selecione um cliente.', 'erro')
@@ -489,34 +497,60 @@ export default function AdminPage() {
       for (let i = 0; i < lotes.length; i++) {
         for (const cliente of lotes[i]) {
           registrosFila.push({
-            perfil_id: cliente.id, email: cliente.email, nome: cliente.nome, assunto: assuntoCampanha, mensagem: textoCampanha, texto_botao: textoBotao, url_botao: urlBotao,                
-            base_url: window.location.origin, status: 'pendente', clicou: false, provedor: provedor, agendado_para: tempoAgendado.toISOString() 
+            perfil_id: cliente.id.startsWith('lead_') ? null : cliente.id, 
+            email: cliente.email, 
+            nome: cliente.nome, 
+            assunto: assuntoCampanha, 
+            mensagem: textoCampanha, 
+            texto_botao: textoBotao, 
+            url_botao: urlBotao,                
+            base_url: window.location.origin, 
+            status: 'pendente', 
+            clicou: false, 
+            provedor: provedor, 
+            agendado_para: tempoAgendado.toISOString() 
           })
         }
         tempoAgendado = new Date(tempoAgendado.getTime() + (intervaloLote * 60000))
       }
       
       await supabase.from('fila_envios').insert(registrosFila)
-      const emailsEnviados = clientesParaEnviar.map(p => p.email)
-      await supabase.from('profiles').update({ ultimo_email_enviado: new Date().toISOString() }).in('email', emailsEnviados)
+      
+      const emailsProfiles = clientesParaEnviar.filter(p => !p.id.startsWith('lead_')).map(p => p.email)
+      const emailsLeads = clientesParaEnviar.filter(p => p.id.startsWith('lead_')).map(p => p.email)
+
+      if (emailsProfiles.length > 0) await supabase.from('profiles').update({ ultimo_email_enviado: new Date().toISOString() }).in('email', emailsProfiles)
+      if (emailsLeads.length > 0) await supabase.from('leads').update({ ultimo_email_enviado: new Date().toISOString() }).in('email', emailsLeads)
       
       mostrarNotificacao(`Sucesso! ${listaFinalIds.length} agendados.`, 'sucesso')
       setSelecionados([]); setAssuntoCampanha(''); setTextoCampanha(''); setTextoBotao(''); setUrlBotao('')
-      carregarFila(); carregarPerfis()
+      carregarFila(); carregarPerfis(); carregarLeadsExit()
     } catch (error) { mostrarNotificacao('Erro.', 'erro') }
     setEnviandoMassa(false)
   }
 
+  // ⚠️ NOVA MÁGICA: Juntando os Leads com os Perfis na Interface ⚠️
+  const leadsConvertidos = leadsExit.map(l => ({
+    id: `lead_${l.email}`,
+    nome: l.segmento === 'leitor' ? 'Lead Popup (Leitor)' : 'Lead Popup (Autor)',
+    email: l.email,
+    telefone: l.whatsapp,
+    link_site: '',
+    titulo_ebook: l.segmento === 'leitor' ? 'Popups: Leitores' : 'Popups: Autores',
+    plano_selecionado: 'Importado', // Faz eles caírem automaticamente no filtro de listas!
+    status: 'inativo',
+    ultimo_email_enviado: l.ultimo_email_enviado,
+    ultimo_whats_enviado: l.ultimo_whats_enviado,
+  } as Perfil))
+
+  const todosOsContatos = [...perfis, ...leadsConvertidos]
+
+  // Variáveis para as abas pendente/ativo/inativo (Usam só a base de perfis original)
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const perfisAgrupadosPorCliente = perfisFiltrados.reduce((acc, perfil) => {
       const emailChave = perfil.email || `sem-email-${perfil.id}`
       if (!acc[emailChave]) {
-          acc[emailChave] = { 
-              nome: perfil.nome, 
-              email: perfil.email, 
-              telefone: perfil.telefone, 
-              anuncios: [] 
-          }
+          acc[emailChave] = { nome: perfil.nome, email: perfil.email, telefone: perfil.telefone, anuncios: [] }
       }
       acc[emailChave].anuncios.push(perfil)
       return acc
@@ -528,7 +562,8 @@ export default function AdminPage() {
       setClientesExpandidos(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email])
   }
 
-  const listasImportadasDisponiveis = Array.from(new Set(perfis.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
+  // Listas Importadas e Popups (Usam a base combinada "todosOsContatos")
+  const listasImportadasDisponiveis = Array.from(new Set(todosOsContatos.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
 
   const aplicarFiltroLista = (p: Perfil) => {
     if (filtroListaAtual === 'todos') return true;
@@ -536,7 +571,7 @@ export default function AdminPage() {
     return p.titulo_ebook === filtroListaAtual && p.plano_selecionado === 'Importado';
   }
 
-  const emailsValidosFiltrados = perfis.filter(p => p.email && !p.email.includes('@importado.com')).filter(aplicarFiltroLista)
+  const emailsValidosFiltrados = todosOsContatos.filter(p => p.email && !p.email.includes('@importado.com')).filter(aplicarFiltroLista)
   const clientesUnicosEmail = Array.from(new Map(emailsValidosFiltrados.map(p => [p.email.toLowerCase(), p])).values())
   const clientesComEmailParaMassa = clientesUnicosEmail.filter(p => {
     if (filtroEmailMassa === 'todos') return true
@@ -545,7 +580,7 @@ export default function AdminPage() {
     return true
   })
 
-  const clientesComWhatsappRaw = perfis.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
+  const clientesComWhatsappRaw = todosOsContatos.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
   const clientesUnicosWhats = Array.from(new Map(clientesComWhatsappRaw.map(p => [p.telefone!.replace(/\D/g, ''), p])).values())
   const clientesWhatsAppFiltrados = clientesUnicosWhats.filter(p => {
     if (filtroWhats === 'todos') return true
@@ -761,7 +796,7 @@ export default function AdminPage() {
             🎁 Leads E-books ({leadsExit.length})
           </button>
 
-          {/* ⚠️ NOVO: BOTÃO DA ABA DE CONFIGURAR POPUPS ⚠️ */}
+          {/* ⚠️ BOTÃO DA ABA DE CONFIGURAR POPUPS ⚠️ */}
           <button onClick={() => setAbaAtiva('popups')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'popups' ? 'bg-pink-600 text-white' : 'bg-white text-pink-700 border border-pink-200'}`}>
             🧲 Textos do Popup
           </button>
@@ -1142,9 +1177,15 @@ export default function AdminPage() {
                    >
                      <option value="todos">Todos os Contatos Válidos</option>
                      <option value="vitrine">Apenas Clientes da Vitrine</option>
-                     {listasImportadasDisponiveis.map(lista => (
-                       <option key={lista} value={lista}>{lista}</option>
-                     ))}
+                     <optgroup label="Leads da Popup">
+                       <option value="Popups: Leitores">Popups: Leitores</option>
+                       <option value="Popups: Autores">Popups: Autores</option>
+                     </optgroup>
+                     <optgroup label="Listas Importadas">
+                       {listasImportadasDisponiveis.filter(l => !l.startsWith('Popups:')).map(lista => (
+                         <option key={lista} value={lista}>{lista}</option>
+                       ))}
+                     </optgroup>
                    </select>
                  </div>
 
@@ -1177,6 +1218,7 @@ export default function AdminPage() {
                        <p className="font-bold text-slate-900 flex items-center gap-2">
                          {p.nome} 
                          <span className="font-normal text-sm text-slate-500">({p.email})</span>
+                         {p.id.startsWith('lead_') && <span className="bg-purple-100 text-purple-800 text-[10px] px-2 py-0.5 rounded uppercase font-bold">Popup</span>}
                        </p>
                        <p className="text-xs text-slate-400 mt-1">
                          {p.ultimo_email_enviado 
@@ -1249,9 +1291,15 @@ export default function AdminPage() {
                    >
                      <option value="todos">Todos os Contatos c/ Whats</option>
                      <option value="vitrine">Apenas Clientes da Vitrine</option>
-                     {listasImportadasDisponiveis.map(lista => (
-                       <option key={lista} value={lista}>{lista}</option>
-                     ))}
+                     <optgroup label="Leads da Popup">
+                       <option value="Popups: Leitores">Popups: Leitores</option>
+                       <option value="Popups: Autores">Popups: Autores</option>
+                     </optgroup>
+                     <optgroup label="Listas Importadas">
+                       {listasImportadasDisponiveis.filter(l => !l.startsWith('Popups:')).map(lista => (
+                         <option key={lista} value={lista}>{lista}</option>
+                       ))}
+                     </optgroup>
                    </select>
                  </div>
                  
@@ -1273,6 +1321,7 @@ export default function AdminPage() {
                        <p className="font-bold text-slate-900 flex items-center gap-2">
                          {p.nome} 
                          <span className="text-xs text-slate-500 font-normal">({p.telefone})</span>
+                         {p.id.startsWith('lead_') && <span className="bg-purple-100 text-purple-800 text-[10px] px-2 py-0.5 rounded uppercase font-bold">Popup</span>}
                        </p>
                        <p className="text-xs text-slate-400 mt-1">
                          {p.ultimo_whats_enviado 
