@@ -48,6 +48,10 @@ export default function AdminPage() {
   const [autorizado, setAutorizado] = useState(false) 
   const [isClient, setIsClient] = useState(false) 
 
+  // Estados dos Leads do Exit Popup
+  const [leadsExit, setLeadsExit] = useState<any[]>([])
+  const [filtroSegmentoLead, setFiltroSegmentoLead] = useState('todos') // 'todos', 'leitor', 'autor'
+
   // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
 
@@ -117,6 +121,11 @@ export default function AdminPage() {
     verificarSeguranca()
   }, [])
 
+  const carregarLeadsExit = async () => {
+    const { data } = await supabase.from('leads').select('*').order('updated_at', { ascending: false })
+    if (data) setLeadsExit(data)
+  }
+
   useEffect(() => {
     if (isClient) {
       localStorage.setItem('vitrine_aba_ativa', abaAtiva)
@@ -133,6 +142,7 @@ export default function AdminPage() {
     carregarFila()
     carregarConfiguracoes()
     carregarInscritosPush() 
+    carregarLeadsExit() // Carrega os leads do Exit Popup
     const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
   }
@@ -704,9 +714,86 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('campanhas')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'campanhas' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 border'}`}>📧 E-mail Massa</button>
           <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
 
-          {/* NOVO BOTÃO: NOTIFICAÇÕES PUSH */}
+          {/* BOTÃO DE NOTIFICAÇÕES PUSH */}
           <button onClick={() => setAbaAtiva('push')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'push' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}>🔔 Notificações Push</button>
+
+          {/* BOTÃO DA ABA DE LEADS DO POPUP */}
+          <button onClick={() => setAbaAtiva('leads')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'leads' ? 'bg-purple-600 text-white' : 'bg-white text-purple-700 border border-purple-200'}`}>
+            🎁 Leads E-books ({leadsExit.length})
+          </button>
         </div>
+
+        {/* 🎁 ABA DE LEADS CAPTURADOS PELO POPUP */}
+        {abaAtiva === 'leads' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Leads Capturados (E-books Grátis)</h2>
+                <p className="text-sm text-slate-500 mt-1">Gerencie quem baixou os materiais e entre em contato via WhatsApp.</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setFiltroSegmentoLead('todos')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${filtroSegmentoLead === 'todos' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                  Todos ({leadsExit.length})
+                </button>
+                <button onClick={() => setFiltroSegmentoLead('leitor')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${filtroSegmentoLead === 'leitor' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                  Leitores
+                </button>
+                <button onClick={() => setFiltroSegmentoLead('autor')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${filtroSegmentoLead === 'autor' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                  Autores / Anunciantes
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="p-3 text-xs font-bold text-slate-500 uppercase">E-mail</th>
+                    <th className="p-3 text-xs font-bold text-slate-500 uppercase">WhatsApp</th>
+                    <th className="p-3 text-xs font-bold text-slate-500 uppercase">Segmento</th>
+                    <th className="p-3 text-xs font-bold text-slate-500 uppercase">Data</th>
+                    <th className="p-3 text-xs font-bold text-slate-500 uppercase text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {leadsExit
+                    .filter(l => filtroSegmentoLead === 'todos' || l.segmento === filtroSegmentoLead)
+                    .map((lead) => (
+                      <tr key={lead.email} className="hover:bg-slate-50">
+                        <td className="p-3 font-bold text-slate-800">{lead.email}</td>
+                        <td className="p-3 text-slate-600">{lead.whatsapp}</td>
+                        <td className="p-3">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${lead.segmento === 'leitor' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                            {lead.segmento}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-500 text-xs">
+                          {lead.updated_at ? new Date(lead.updated_at).toLocaleDateString('pt-BR') : 'N/A'}
+                        </td>
+                        <td className="p-3 text-right">
+                          <a 
+                            href={`https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors"
+                          >
+                            💬 Conversar
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  {leadsExit.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-400 font-bold">
+                        Nenhum lead capturado ainda.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* 🔔 ABA DE NOTIFICAÇÕES PUSH */}
         {abaAtiva === 'push' && (
@@ -759,7 +846,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO (COM NOVA SANFONA E EXIBIÇÃO DE FAVORITOS) */}
+        {/* 📋 ABAS PENDENTE / ATIVO / INATIVO */}
         {['pendente', 'ativo', 'inativo'].includes(abaAtiva) && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             {listaClientesAgrupados.length === 0 ? (
@@ -769,7 +856,6 @@ export default function AdminPage() {
                 {listaClientesAgrupados.map(cliente => (
                   <div key={cliente.email} className="bg-white group transition-colors">
                     
-                    {/* CABEÇALHO DO CLIENTE (O CLIQUE DA SANFONA) */}
                     <div 
                       onClick={() => toggleExpandirCliente(cliente.email)}
                       className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50"
@@ -790,14 +876,12 @@ export default function AdminPage() {
                        </div>
                     </div>
 
-                    {/* CONTEÚDO EXPANDIDO (OS E-BOOKS DELE) */}
                     {clientesExpandidos.includes(cliente.email) && (
                       <div className="bg-slate-50 border-t border-slate-100 p-5 space-y-4">
                         {cliente.anuncios.map(perfil => (
                            <div key={perfil.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col md:flex-row justify-between gap-4 items-center">
                              
                              <div className="flex-1 min-w-0 w-full">
-                               {/* Título e Tag de Favoritos */}
                                <div className="flex items-center gap-3 mb-1">
                                  <h4 className="font-bold text-slate-900 text-lg truncate">📖 {perfil.titulo_ebook}</h4>
                                  {perfil.favoritos_count ? (
@@ -887,7 +971,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ⏳ ABA DE FILA (MONITOR DE ENVIOS) */}
+        {/* ⏳ ABA DE FILA */}
         {abaAtiva === 'fila' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50 gap-4">
