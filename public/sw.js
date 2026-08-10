@@ -20,9 +20,17 @@ self.addEventListener('push', function (event) {
   }
 });
 
-self.addEventListener('notificationclick', function (event) {
+self.addEventListener('notificationclick', async (event) => {
   event.notification.close();
-  if (event.notification.data && event.notification.data.url) {
-    event.waitUntil(clients.openWindow(event.notification.data.url));
-  }
+
+  // 1. Grava o clique no banco (Atualiza a coluna last_active)
+  const endpoint = event.notification.data.endpoint;
+  await fetch('/api/push/track-click', {
+    method: 'POST',
+    body: JSON.stringify({ endpoint }),
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  // 2. Abre o link de destino
+  event.waitUntil(clients.openWindow(event.notification.data.url));
 });
