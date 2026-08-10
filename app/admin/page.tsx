@@ -52,6 +52,15 @@ export default function AdminPage() {
   const [leadsExit, setLeadsExit] = useState<any[]>([])
   const [filtroSegmentoLead, setFiltroSegmentoLead] = useState('todos') // 'todos', 'leitor', 'autor'
 
+  // ⚠️ ESTADOS DE CONFIGURAÇÃO DOS POPUPS (NOVO) ⚠️
+  const [popupLeitor, setPopupLeitor] = useState({
+    titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: ''
+  })
+  const [popupAutor, setPopupAutor] = useState({
+    titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: ''
+  })
+  const [salvandoPopup, setSalvandoPopup] = useState(false)
+
   // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
 
@@ -126,6 +135,35 @@ export default function AdminPage() {
     if (data) setLeadsExit(data)
   }
 
+  // ⚠️ NOVA FUNÇÃO: CARREGA OS POPUPS ⚠️
+  const carregarPopups = async () => {
+    try {
+      const { data, error } = await supabase.from('popup_configs').select('*')
+      if (error) throw error
+      if (data) {
+        const leitor = data.find((d: any) => d.segmento === 'leitor')
+        const autor = data.find((d: any) => d.segmento === 'autor')
+        if (leitor) setPopupLeitor(leitor)
+        if (autor) setPopupAutor(autor)
+      }
+    } catch (e) {
+      console.warn('Tabela popup_configs ainda não existe ou ocorreu um erro.')
+    }
+  }
+
+  // ⚠️ NOVA FUNÇÃO: SALVA OS POPUPS ⚠️
+  const salvarPopup = async (segmento: string, dados: any) => {
+    setSalvandoPopup(true)
+    try {
+      const { error } = await supabase.from('popup_configs').upsert({ segmento, ...dados })
+      if (error) throw error
+      mostrarNotificacao(`Popup de ${segmento} salvo com sucesso!`, 'sucesso')
+    } catch (error) {
+      mostrarNotificacao(`Erro ao salvar popup. Crie a tabela primeiro!`, 'erro')
+    }
+    setSalvandoPopup(false)
+  }
+
   useEffect(() => {
     if (isClient) {
       localStorage.setItem('vitrine_aba_ativa', abaAtiva)
@@ -142,7 +180,8 @@ export default function AdminPage() {
     carregarFila()
     carregarConfiguracoes()
     carregarInscritosPush() 
-    carregarLeadsExit() // Carrega os leads do Exit Popup
+    carregarLeadsExit()
+    carregarPopups() // Busca as configs dos popups
     const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
   }
@@ -721,7 +760,69 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('leads')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'leads' ? 'bg-purple-600 text-white' : 'bg-white text-purple-700 border border-purple-200'}`}>
             🎁 Leads E-books ({leadsExit.length})
           </button>
+
+          {/* ⚠️ NOVO: BOTÃO DA ABA DE CONFIGURAR POPUPS ⚠️ */}
+          <button onClick={() => setAbaAtiva('popups')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'popups' ? 'bg-pink-600 text-white' : 'bg-white text-pink-700 border border-pink-200'}`}>
+            🧲 Textos do Popup
+          </button>
         </div>
+
+        {/* ⚠️ NOVA ABA: CONFIGURAR TEXTOS DOS POPUPS ⚠️ */}
+        {abaAtiva === 'popups' && (
+          <div className="grid lg:grid-cols-2 gap-8">
+            
+            {/* POPUP DE LEITORES (VITRINE) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="p-6 border-b border-slate-100 bg-blue-50">
+                <h2 className="text-xl font-bold text-blue-900">📚 Popup de Leitores (Vitrine)</h2>
+                <p className="text-sm text-blue-700 mt-1">Configure o que aparece para os visitantes comuns do site.</p>
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); salvarPopup('leitor', popupLeitor) }} className="p-6 space-y-4">
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Título do Popup</label><input required value={popupLeitor.titulo} onChange={e => setPopupLeitor({...popupLeitor, titulo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Ex: Leve seu E-book Grátis!" /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Subtítulo do Popup</label><input required value={popupLeitor.subtitulo} onChange={e => setPopupLeitor({...popupLeitor, subtitulo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Preencha para receber..." /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Texto do Botão</label><input required value={popupLeitor.botao_texto} onChange={e => setPopupLeitor({...popupLeitor, botao_texto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Quero meu E-book" /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">URL da Imagem de Capa</label><input value={popupLeitor.imagem_url} onChange={e => setPopupLeitor({...popupLeitor, imagem_url: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="https://..." /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Link do E-book a entregar (PDF)</label><input required value={popupLeitor.ebook_link} onChange={e => setPopupLeitor({...popupLeitor, ebook_link: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="https://..." /></div>
+                
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="font-bold text-sm text-slate-900 mb-3">E-mail de Entrega</p>
+                  <div><label className="block text-xs font-bold text-slate-700 mb-1">Assunto do E-mail</label><input required value={popupLeitor.email_assunto} onChange={e => setPopupLeitor({...popupLeitor, email_assunto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Seu E-book chegou!" /></div>
+                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Corpo do E-mail (Use <strong className="text-pink-600">[LINK]</strong> onde o botão de baixar deve aparecer)</label><textarea required rows={4} value={popupLeitor.email_corpo} onChange={e => setPopupLeitor({...popupLeitor, email_corpo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Olá! Aqui está: [LINK]" /></div>
+                </div>
+
+                <button type="submit" disabled={salvandoPopup} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50">
+                  {salvandoPopup ? 'Salvando...' : 'Salvar Popup Leitores'}
+                </button>
+              </form>
+            </div>
+
+            {/* POPUP DE AUTORES (CADASTRO) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="p-6 border-b border-slate-100 bg-emerald-50">
+                <h2 className="text-xl font-bold text-emerald-900">🚀 Popup de Anunciantes</h2>
+                <p className="text-sm text-emerald-700 mt-1">Configure a isca para quem acessa a página de publicar e-book.</p>
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); salvarPopup('autor', popupAutor) }} className="p-6 space-y-4">
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Título do Popup</label><input required value={popupAutor.titulo} onChange={e => setPopupAutor({...popupAutor, titulo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Ex: Guia para Vender Mais!" /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Subtítulo do Popup</label><input required value={popupAutor.subtitulo} onChange={e => setPopupAutor({...popupAutor, subtitulo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Preencha para receber..." /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Texto do Botão</label><input required value={popupAutor.botao_texto} onChange={e => setPopupAutor({...popupAutor, botao_texto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Receber Manual" /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">URL da Imagem de Capa</label><input value={popupAutor.imagem_url} onChange={e => setPopupAutor({...popupAutor, imagem_url: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="https://..." /></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1">Link do E-book a entregar (PDF)</label><input required value={popupAutor.ebook_link} onChange={e => setPopupAutor({...popupAutor, ebook_link: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="https://..." /></div>
+                
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="font-bold text-sm text-slate-900 mb-3">E-mail de Entrega</p>
+                  <div><label className="block text-xs font-bold text-slate-700 mb-1">Assunto do E-mail</label><input required value={popupAutor.email_assunto} onChange={e => setPopupAutor({...popupAutor, email_assunto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Seu material chegou!" /></div>
+                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Corpo do E-mail (Use <strong className="text-pink-600">[LINK]</strong> onde o botão de baixar deve aparecer)</label><textarea required rows={4} value={popupAutor.email_corpo} onChange={e => setPopupAutor({...popupAutor, email_corpo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Olá! Aqui está o manual: [LINK]" /></div>
+                </div>
+
+                <button type="submit" disabled={salvandoPopup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50">
+                  {salvandoPopup ? 'Salvando...' : 'Salvar Popup Anunciantes'}
+                </button>
+              </form>
+            </div>
+
+          </div>
+        )}
 
         {/* 🎁 ABA DE LEADS CAPTURADOS PELO POPUP */}
         {abaAtiva === 'leads' && (

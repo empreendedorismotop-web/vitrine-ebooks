@@ -1,22 +1,33 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
 export default function ExitPopup({ tipoSegmento }) {
+  const [config, setConfig] = useState(null)
   const [visivel, setVisivel] = useState(false)
   const [email, setEmail] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [enviado, setEnviado] = useState(false)
 
   useEffect(() => {
+    // 1. Busca a configuração do popup no Supabase
+    async function carregarConfig() {
+      const { data } = await supabase
+        .from('popup_configs')
+        .select('*')
+        .eq('segmento', tipoSegmento)
+        .single()
+      
+      if (data) setConfig(data)
+    }
+    carregarConfig()
+
+    // 2. Lógica de exibição (Timer + Exit Intent)
     const jaFechou = sessionStorage.getItem('popup_fechado')
     if (jaFechou) return
 
-    // 1. Gatilho de tempo (5 segundos) - Excelente para celulares e desktop
-    const timer = setTimeout(() => {
-      setVisivel(true)
-    }, 5000)
+    const timer = setTimeout(() => setVisivel(true), 5000)
 
-    // 2. Gatilho de saída do mouse (Exit Intent original para computadores)
     const handleMouseLeave = (e) => {
       if (e.clientY <= 0) {
         setVisivel(true)
@@ -30,7 +41,7 @@ export default function ExitPopup({ tipoSegmento }) {
       clearTimeout(timer)
       document.removeEventListener('mouseleave', handleMouseLeave)
     }
-  }, [])
+  }, [tipoSegmento])
 
   const fecharPopup = () => {
     setVisivel(false)
@@ -52,7 +63,8 @@ export default function ExitPopup({ tipoSegmento }) {
     }
   }
 
-  if (!visivel) return null
+  // Só mostra se estiver visível E a config tiver sido carregada
+  if (!visivel || !config) return null
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -66,13 +78,16 @@ export default function ExitPopup({ tipoSegmento }) {
 
         {!enviado ? (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Imagem dinâmica da capa */}
+            {config.imagem_url && (
+              <img src={config.imagem_url} alt="Capa E-book" className="w-full rounded-lg mb-2 shadow-sm" />
+            )}
+            
             <h3 className="text-xl font-bold text-gray-900">
-              {tipoSegmento === 'leitor' ? '📚 Leve seu E-book Grátis!' : '🚀 Guia Exclusivo para Anunciantes'}
+              {config.titulo}
             </h3>
             <p className="text-sm text-gray-600">
-              {tipoSegmento === 'leitor' 
-                ? 'Preencha seus dados para receber o e-book selecionado no seu e-mail.' 
-                : 'Insira seus dados para receber o manual de estratégias de anúncios.'}
+              {config.subtitulo}
             </p>
             
             <input 
@@ -97,13 +112,13 @@ export default function ExitPopup({ tipoSegmento }) {
               type="submit"
               className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg transition"
             >
-              Receber E-book Agora!
+              {config.botao_texto}
             </button>
           </form>
         ) : (
           <div className="text-center py-6 space-y-2">
             <h4 className="text-2xl font-bold text-green-600">Tudo pronto! 🎉</h4>
-            <p className="text-sm text-gray-600">O e-book foi enviado para o seu e-mail.</p>
+            <p className="text-sm text-gray-600">O material foi enviado para o seu e-mail.</p>
           </div>
         )}
       </div>
