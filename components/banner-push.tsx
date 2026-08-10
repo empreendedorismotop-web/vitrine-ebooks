@@ -85,7 +85,7 @@ export function BannerPush() {
               Quero receber novidades e e-books grátis!
            </h2>
            <p className="text-orange-50 md:text-lg">
-              Ative as notificações no seu navegador e seja o primeiro a baixar nossos materiais exclusivos.
+              Ative as notificações no seu navegador para baixar nossos materiais exclusivos.
            </p>
          </div>
 
