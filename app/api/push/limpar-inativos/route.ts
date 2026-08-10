@@ -12,11 +12,11 @@ export async function GET(req: Request) {
     const limiteData = new Date()
     limiteData.setMonth(limiteData.getMonth() - mesesInativo)
 
-    // Remove do Supabase quem tem o last_active mais antigo que o limite
     const { error, count } = await supabase
       .from('push_subscriptions')
       .delete({ count: 'exact' })
-      .lt('last_active', limiteData.toISOString())
+      // Remove quem tem a última atividade antiga OU quem nunca clicou (NULL)
+      .or(`last_active.lt.${limiteData.toISOString()},last_active.is.null`)
 
     if (error) throw error
 
