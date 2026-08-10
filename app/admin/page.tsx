@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { BookOpen } from 'lucide-react'
 
 type Clique = { origem: string }
 
@@ -60,6 +61,11 @@ export default function AdminPage() {
     titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: ''
   })
   const [salvandoPopup, setSalvandoPopup] = useState(false)
+
+  // Estados da Biblioteca Grátis
+  const [biblioteca, setBiblioteca] = useState<any[]>([])
+  const [novoEbookGratis, setNovoEbookGratis] = useState({ titulo: '', imagem_url: '', link_download: '' })
+  const [uploadingGratis, setUploadingGratis] = useState(false)
 
   // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
@@ -149,6 +155,15 @@ export default function AdminPage() {
     }
   }
 
+  const carregarBiblioteca = async () => {
+    try {
+      const { data } = await supabase.from('ebooks_gratis').select('*').order('created_at', { ascending: false })
+      if (data) setBiblioteca(data)
+    } catch (e) {
+      console.warn('Tabela ebooks_gratis ainda não existe.')
+    }
+  }
+
   const salvarPopup = async (segmento: string, dados: any) => {
     setSalvandoPopup(true)
     try {
@@ -179,6 +194,7 @@ export default function AdminPage() {
     carregarInscritosPush() 
     carregarLeadsExit()
     carregarPopups() 
+    carregarBiblioteca()
     const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
   }
@@ -318,7 +334,6 @@ export default function AdminPage() {
     return base
   }
 
-  // ⚠️ ATUALIZADO: Salva o clique no Whats na tabela certa (Profile ou Lead)
   const marcarWhatsAppEnviado = async (id: string) => {
     const agora = new Date().toISOString()
     if (id.startsWith('lead_')) {
@@ -331,7 +346,6 @@ export default function AdminPage() {
     }
   }
 
-  // ⚠️ ATUALIZADO: Limpa o histórico nas duas tabelas
   const resetarEnviosWhatsApp = async () => {
     if (confirm('Zerar o histórico do WhatsApp para esta lista?')) {
       const clientesParaLimpar = clientesWhatsAppFiltrados.filter(p => p.ultimo_whats_enviado != null)
@@ -348,7 +362,6 @@ export default function AdminPage() {
     }
   }
 
-  // ⚠️ ATUALIZADO: Limpa o histórico nas duas tabelas
   const resetarEnviosEmail = async () => {
     if (confirm('Zerar o histórico de E-MAIL para esta lista? Eles voltarão para "Falta Enviar".')) {
       const clientesParaLimpar = clientesComEmailParaMassa.filter(p => p.ultimo_email_enviado != null)
@@ -479,7 +492,6 @@ export default function AdminPage() {
     }
   }
 
-  // ⚠️ ATUALIZADO: Registra o envio em massa tanto na tabela de leads quanto na de profiles
   const dispararCampanhaMassa = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selecionados.length === 0) return mostrarNotificacao('Selecione um cliente.', 'erro')
@@ -529,7 +541,6 @@ export default function AdminPage() {
     setEnviandoMassa(false)
   }
 
-  // ⚠️ NOVA MÁGICA: Juntando os Leads com os Perfis na Interface ⚠️
   const leadsConvertidos = leadsExit.map(l => ({
     id: `lead_${l.email}`,
     nome: l.segmento === 'leitor' ? 'Lead Popup (Leitor)' : 'Lead Popup (Autor)',
@@ -537,7 +548,7 @@ export default function AdminPage() {
     telefone: l.whatsapp,
     link_site: '',
     titulo_ebook: l.segmento === 'leitor' ? 'Popups: Leitores' : 'Popups: Autores',
-    plano_selecionado: 'Importado', // Faz eles caírem automaticamente no filtro de listas!
+    plano_selecionado: 'Importado', 
     status: 'inativo',
     ultimo_email_enviado: l.ultimo_email_enviado,
     ultimo_whats_enviado: l.ultimo_whats_enviado,
@@ -545,7 +556,6 @@ export default function AdminPage() {
 
   const todosOsContatos = [...perfis, ...leadsConvertidos]
 
-  // Variáveis para as abas pendente/ativo/inativo (Usam só a base de perfis original)
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const perfisAgrupadosPorCliente = perfisFiltrados.reduce((acc, perfil) => {
       const emailChave = perfil.email || `sem-email-${perfil.id}`
@@ -562,7 +572,6 @@ export default function AdminPage() {
       setClientesExpandidos(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email])
   }
 
-  // Listas Importadas e Popups (Usam a base combinada "todosOsContatos")
   const listasImportadasDisponiveis = Array.from(new Set(todosOsContatos.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
 
   const aplicarFiltroLista = (p: Perfil) => {
@@ -796,13 +805,93 @@ export default function AdminPage() {
             🎁 Leads E-books ({leadsExit.length})
           </button>
 
-          {/* ⚠️ BOTÃO DA ABA DE CONFIGURAR POPUPS ⚠️ */}
+          {/* BOTÃO DA ABA DE CONFIGURAR POPUPS */}
           <button onClick={() => setAbaAtiva('popups')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'popups' ? 'bg-pink-600 text-white' : 'bg-white text-pink-700 border border-pink-200'}`}>
             🧲 Textos do Popup
           </button>
+
+          {/* ⚠️ NOVO BOTÃO DA BIBLIOTECA GRÁTIS ⚠️ */}
+          <button onClick={() => setAbaAtiva('biblioteca')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${abaAtiva === 'biblioteca' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}>
+            📚 Biblioteca Grátis
+          </button>
         </div>
 
-        {/* ⚠️ NOVA ABA: CONFIGURAR TEXTOS DOS POPUPS ⚠️ */}
+        {/* 📚 ABA DE BIBLIOTECA GRÁTIS */}
+        {abaAtiva === 'biblioteca' && (
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-6">Adicionar Novo E-book Grátis</h2>
+              <form onSubmit={async (e) => {
+                e.preventDefault()
+                if (!novoEbookGratis.imagem_url) return mostrarNotificacao('Adicione uma capa!', 'erro')
+                const { error } = await supabase.from('ebooks_gratis').insert([novoEbookGratis])
+                if (!error) {
+                  mostrarNotificacao('E-book Grátis Adicionado!', 'sucesso')
+                  setNovoEbookGratis({ titulo: '', imagem_url: '', link_download: '' })
+                  carregarBiblioteca()
+                } else mostrarNotificacao('Erro ao adicionar.', 'erro')
+              }} className="space-y-4">
+                
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:bg-slate-50 transition-colors">
+                   {novoEbookGratis.imagem_url ? (
+                     <img src={novoEbookGratis.imagem_url} className="h-32 mx-auto rounded shadow-sm mb-3" alt="Capa" />
+                   ) : (
+                     <div className="h-32 flex items-center justify-center text-slate-400 mb-3"><BookOpen className="size-8" /></div>
+                   )}
+                   <input type="file" accept="image/*" disabled={uploadingGratis} onChange={async (e) => {
+                      try {
+                        setUploadingGratis(true)
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const ext = file.name.split('.').pop()
+                        const fileName = `gratis-${Date.now()}.${ext}`
+                        const { error } = await supabase.storage.from('imagens').upload(fileName, file)
+                        if (error) throw error
+                        const { data } = supabase.storage.from('imagens').getPublicUrl(fileName)
+                        setNovoEbookGratis({...novoEbookGratis, imagem_url: data.publicUrl})
+                      } catch(e) { mostrarNotificacao('Erro no upload', 'erro') } finally { setUploadingGratis(false) }
+                   }} className="text-xs w-full file:bg-orange-100 file:text-orange-700 file:border-0 file:rounded file:px-2 file:py-1 cursor-pointer" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Título do E-book</label>
+                  <input required value={novoEbookGratis.titulo} onChange={e => setNovoEbookGratis({...novoEbookGratis, titulo: e.target.value})} className="w-full p-2.5 border rounded-lg text-sm outline-none focus:border-orange-500" placeholder="Ex: Guia de Marketing" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Link de Download Externo (Drive/Mega)</label>
+                  <input required type="url" value={novoEbookGratis.link_download} onChange={e => setNovoEbookGratis({...novoEbookGratis, link_download: e.target.value})} className="w-full p-2.5 border rounded-lg text-sm outline-none focus:border-orange-500" placeholder="https://..." />
+                </div>
+                
+                <button type="submit" disabled={uploadingGratis} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-50">
+                  {uploadingGratis ? 'Carregando...' : '+ Adicionar à Biblioteca'}
+                </button>
+              </form>
+            </div>
+
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-slate-900">E-books na Biblioteca ({biblioteca.length})</h2>
+              </div>
+              <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto">
+                {biblioteca.map(ebook => (
+                  <div key={ebook.id} className="border border-slate-200 rounded-xl p-3 flex flex-col bg-white hover:border-orange-300 transition-colors">
+                    <img src={ebook.imagem_url} className="w-full aspect-[3/4] object-cover rounded shadow-sm mb-3" alt="Capa" />
+                    <h3 className="font-bold text-xs text-slate-800 line-clamp-2 mb-2 flex-1">{ebook.titulo}</h3>
+                    <button onClick={async () => {
+                      if(confirm('Remover este e-book da biblioteca grátis?')) {
+                        await supabase.from('ebooks_gratis').delete().eq('id', ebook.id)
+                        carregarBiblioteca()
+                      }
+                    }} className="w-full bg-red-50 text-red-600 text-xs font-bold py-1.5 rounded hover:bg-red-100 transition-colors">Remover</button>
+                  </div>
+                ))}
+                {biblioteca.length === 0 && <div className="col-span-full text-center py-8 text-slate-400 font-bold">Nenhum e-book gratuito cadastrado.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ⚠️ NOVA ABA: CONFIGURAR TEXTOS DOS POPUPS */}
         {abaAtiva === 'popups' && (
           <div className="grid lg:grid-cols-2 gap-8">
             
