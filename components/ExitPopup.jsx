@@ -11,6 +11,12 @@ export default function ExitPopup({ tipoSegmento }) {
     const jaFechou = sessionStorage.getItem('popup_fechado')
     if (jaFechou) return
 
+    // 1. Gatilho de tempo (5 segundos) - Excelente para celulares e desktop
+    const timer = setTimeout(() => {
+      setVisivel(true)
+    }, 5000)
+
+    // 2. Gatilho de saída do mouse (Exit Intent original para computadores)
     const handleMouseLeave = (e) => {
       if (e.clientY <= 0) {
         setVisivel(true)
@@ -19,7 +25,11 @@ export default function ExitPopup({ tipoSegmento }) {
     }
 
     document.addEventListener('mouseleave', handleMouseLeave)
-    return () => document.removeEventListener('mouseleave', handleMouseLeave)
+    
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mouseleave', handleMouseLeave)
+    }
   }, [])
 
   const fecharPopup = () => {

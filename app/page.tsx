@@ -1,6 +1,7 @@
 'use client'
 
 import { BannerPush } from '@/components/banner-push'
+import ExitPopup from '@/components/ExitPopup'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { ShieldCheck, ChevronRight, ChevronLeft, Crown, Star, Heart } from 'lucide-react'
@@ -125,7 +126,7 @@ export default function HomePage() {
             <Hero query={searchQuery} onQueryChange={setSearchQuery} />
         </div>
 
-        {/* 👇 O NOVO BANNER CAPTADOR DE LEADS AGORA FICA NO TOPO 👇 */}
+        {/* 👇 O BANNER CAPTADOR DE LEADS JÁ EXISTENTE 👇 */}
         <div className="mt-8 border-b border-slate-100 pb-4">
           <BannerPush />
         </div>
@@ -234,11 +235,11 @@ export default function HomePage() {
                            </div>
                            
                            <div className="h-[280px] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center p-6">
-                             <img 
+                              <img 
                                 src={vip.imagem_url || '/placeholder-book.png'} 
                                 alt={vip.titulo_ebook} 
                                 className="h-full w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform duration-500" 
-                             />
+                              />
                            </div>
                            
                            <div className="p-5 flex flex-col flex-1 border-t border-slate-100">
@@ -296,6 +297,10 @@ export default function HomePage() {
           </div>
         </section>
       </main>
+
+      {/* 👇 POPUP DE CAPTURA DE LEADS (EXIT INTENT + TIMER) PARA LEITORES 👇 */}
+      <ExitPopup tipoSegmento="leitor" />
+
       <SiteFooter />
     </>
   )
