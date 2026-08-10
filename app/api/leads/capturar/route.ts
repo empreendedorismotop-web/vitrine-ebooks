@@ -25,12 +25,13 @@ export async function POST(req: Request) {
     const { data: configSistema } = await supabase.from('configuracoes').select('*').eq('id', 1).single()
     const { data: configPopup } = await supabase.from('popup_configs').select('*').eq('segmento', segmento).single()
 
-    // Seleciona o Transportador correto com base na sua escolha no Admin
+    // ⚠️ O MOTOR DE DECISÃO: Gmail ou SMTP Externo? ⚠️
     const provedorAtivo = configSistema?.provedor_ativo || 'gmail'
     let transporter;
     let emailRemetente = '';
 
-    if (provedorAtivo === 'externo') {
+    if (provedorAtivo === 'externo' && configSistema?.smtp_host) {
+      // Usa o Externo (Hostinger, SMTP2GO, SendPulse, etc)
       transporter = nodemailer.createTransport({
         host: configSistema.smtp_host,
         port: Number(configSistema.smtp_port),
@@ -39,14 +40,18 @@ export async function POST(req: Request) {
       })
       emailRemetente = configSistema.smtp_remetente
     } else {
+      // Usa o Gmail como Segurança
       transporter = nodemailer.createTransport({
         service: 'gmail',
-        auth: { user: configSistema.gmail_email, pass: configSistema.gmail_senha }
+        auth: { 
+          user: configSistema?.gmail_email || process.env.GMAIL_EMAIL, 
+          pass: configSistema?.gmail_senha || process.env.GMAIL_SENHA 
+        }
       })
-      emailRemetente = configSistema.gmail_email
+      emailRemetente = configSistema?.gmail_email || process.env.GMAIL_EMAIL || ''
     }
 
-    // 3. Montar o texto
+    // 3. Montar os Textos Dinâmicos do Painel Admin
     let assunto = configPopup?.email_assunto || 'Seu Material Chegou!'
     let ebookLink = configPopup?.ebook_link || 'https://vitrine-ebooks.vercel.app'
     let textoBotao = configPopup?.email_botao_texto || 'Baixar Material'
@@ -54,7 +59,7 @@ export async function POST(req: Request) {
 
     const botaoHtml = `<a href="${ebookLink}" target="_blank" style="background:#ea580c;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:bold;font-family:sans-serif;">${textoBotao}</a>`
     
-    // Insere o Botão e o Link de Descadastro
+    // Insere o Botão e o Link de Descadastro Automático
     const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://vitrine-ebooks.vercel.app').replace(/\/$/, '')
     const linkDescadastro = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}`
     
