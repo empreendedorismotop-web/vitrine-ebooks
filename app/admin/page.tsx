@@ -53,7 +53,7 @@ export default function AdminPage() {
 
   const [perfis, setPerfis] = useState<Perfil[]>([])
   const [fila, setFila] = useState<FilaItem[]>([]) 
-  const [inscritosPush, setInscritosPush] = useState<any[]>([]) // NOVO: Controle de inscritos no Push
+  const [inscritosPush, setInscritosPush] = useState<any[]>([]) 
   
   const [abaAtiva, setAbaAtiva] = useState('pendente')
   const [abaFila, setAbaFila] = useState('pendente') 
@@ -132,18 +132,16 @@ export default function AdminPage() {
     carregarPerfis()
     carregarFila()
     carregarConfiguracoes()
-    carregarInscritosPush() // Busca a galera do Push
+    carregarInscritosPush() 
     const intervalo = setInterval(() => { carregarFila() }, 15000)
     return () => clearInterval(intervalo)
   }
 
-  // BUSCA OS APARELHOS INSCRITOS PARA RECEBER PUSH
   const carregarInscritosPush = async () => {
     const { data } = await supabase.from('push_subscriptions').select('*')
     if (data) setInscritosPush(data)
   }
 
-  // MOTOR DE DISPARO DE PUSH EM LOTES (Anti-Travamento)
   const dispararPushEmMassa = async (e: React.FormEvent) => {
     e.preventDefault()
     if (inscritosPush.length === 0) return mostrarNotificacao('Ninguém inscrito ainda.', 'erro')
@@ -151,7 +149,7 @@ export default function AdminPage() {
     setEnviandoPush(true)
     setProgressoPush({ enviados: 0, total: inscritosPush.length })
     
-    const maxPorLote = 50 // Envia de 50 em 50 para não estourar a Vercel
+    const maxPorLote = 50 
     let totalEnviadosAgora = 0
 
     for (let i = 0; i < inscritosPush.length; i += maxPorLote) {
@@ -174,7 +172,6 @@ export default function AdminPage() {
         totalEnviadosAgora += lote.length
         setProgressoPush({ enviados: totalEnviadosAgora, total: inscritosPush.length })
         
-        // Espera 1.5 segundos antes de enviar o próximo lote
         if (i + maxPorLote < inscritosPush.length) {
           await new Promise(resolve => setTimeout(resolve, 1500))
         }
@@ -778,18 +775,18 @@ export default function AdminPage() {
                       className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50"
                     >
                        <div>
-                           <h3 className="font-bold text-slate-900 flex items-center gap-3 text-lg">
-                               👤 {cliente.nome}
-                               <span className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
-                                   {cliente.anuncios.length} anúncio(s)
-                               </span>
-                           </h3>
-                           <p className="text-sm text-slate-500 mt-1">
-                               {cliente.email} {cliente.telefone ? ` • ${cliente.telefone}` : ''}
-                           </p>
+                            <h3 className="font-bold text-slate-900 flex items-center gap-3 text-lg">
+                                👤 {cliente.nome}
+                                <span className="bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
+                                    {cliente.anuncios.length} anúncio(s)
+                                </span>
+                            </h3>
+                            <p className="text-sm text-slate-500 mt-1">
+                                {cliente.email} {cliente.telefone ? ` • ${cliente.telefone}` : ''}
+                            </p>
                        </div>
                        <div className="bg-slate-100 text-slate-600 p-2 rounded-full">
-                           {clientesExpandidos.includes(cliente.email) ? '🔼' : '🔽'}
+                            {clientesExpandidos.includes(cliente.email) ? '🔼' : '🔽'}
                        </div>
                     </div>
 
