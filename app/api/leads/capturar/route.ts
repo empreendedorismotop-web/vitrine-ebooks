@@ -6,16 +6,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.GMAIL_EMAIL || process.env.SMTP_USER,
-    pass: process.env.GMAIL_SENHA || process.env.SMTP_PASS,
-  },
-})
-
 export async function POST(req: Request) {
   try {
     const { email, whatsapp, segmento } = await req.json()
@@ -29,37 +19,51 @@ export async function POST(req: Request) {
       .from('leads')
       .upsert({ email, whatsapp, segmento, updated_at: new Date() }, { onConflict: 'email' })
 
-    if (dbError) {
-      console.error('Erro no Supabase:', dbError)
-      throw new Error('Erro ao salvar no banco de dados')
+    if (dbError) throw new Error('Erro ao salvar no banco de dados')
+
+    // 2. Buscar configurações ATIVAS no banco (Textos e Provedor)
+    const { data: configSistema } = await supabase.from('configuracoes').select('*').eq('id', 1).single()
+    const { data: configPopup } = await supabase.from('popup_configs').select('*').eq('segmento', segmento).single()
+
+    // Seleciona o Transportador correto com base na sua escolha no Admin
+    const provedorAtivo = configSistema?.provedor_ativo || 'gmail'
+    let transporter;
+    let emailRemetente = '';
+
+    if (provedorAtivo === 'externo') {
+      transporter = nodemailer.createTransport({
+        host: configSistema.smtp_host,
+        port: Number(configSistema.smtp_port),
+        secure: Number(configSistema.smtp_port) === 465,
+        auth: { user: configSistema.smtp_user, pass: configSistema.smtp_pass }
+      })
+      emailRemetente = configSistema.smtp_remetente
+    } else {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: configSistema.gmail_email, pass: configSistema.gmail_senha }
+      })
+      emailRemetente = configSistema.gmail_email
     }
 
-    // 2. Buscar dinamicamente as configurações do popup/e-mail no banco
-    const { data: config } = await supabase
-      .from('popup_configs')
-      .select('*')
-      .eq('segmento', segmento)
-      .single()
+    // 3. Montar o texto
+    let assunto = configPopup?.email_assunto || 'Seu Material Chegou!'
+    let ebookLink = configPopup?.ebook_link || 'https://vitrine-ebooks.vercel.app'
+    let textoBotao = configPopup?.email_botao_texto || 'Baixar Material'
+    let corpoEmail = configPopup?.email_corpo || '<p>Aqui está o seu material:</p><p>[BOTAO]</p>'
 
-    // Valores padrão de segurança caso a tabela não tenha registros
-    let assunto = config?.email_assunto || (segmento === 'leitor' ? '📚 Seu E-book Grátis chegou!' : '🚀 Seu Guia de Anúncios chegou!')
-    let ebookLink = config?.ebook_link || 'https://vitrine-ebooks.vercel.app'
-    let textoBotao = config?.email_botao_texto || 'Baixar Material'
-    let corpoEmail = config?.email_corpo || '<p>Olá! Aqui está o seu material exclusivo:</p><p>[BOTAO]</p>'
+    const botaoHtml = `<a href="${ebookLink}" target="_blank" style="background:#ea580c;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:bold;font-family:sans-serif;">${textoBotao}</a>`
+    
+    // Insere o Botão e o Link de Descadastro
+    const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://vitrine-ebooks.vercel.app').replace(/\/$/, '')
+    const linkDescadastro = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}`
+    
+    let mensagemHtml = corpoEmail.replace('[BOTAO]', botaoHtml)
+    mensagemHtml += `<br><br><hr style="border:none; border-top:1px solid #e2e8f0; margin:30px 0;"><p style="font-size:12px; color:#94a3b8; font-family:sans-serif;">Caso não queira mais receber nossos avisos e e-books gratuitos, você pode <a href="${linkDescadastro}" style="color:#64748b;">se descadastrar clicando aqui</a>.</p>`
 
-    // 3. Montar o botão HTML customizado com o link e o texto configurados no admin
-    const botaoHtml = `
-      <a href="${ebookLink}" target="_blank" style="background:#ea580c;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:bold;font-family:sans-serif;">
-        ${textoBotao}
-      </a>
-    `
-
-    // Substitui a tag [BOTAO] pelo botão real no texto do e-mail
-    const mensagemHtml = corpoEmail.replace('[BOTAO]', botaoHtml)
-
-    // 4. Enviar o e-mail via SMTP configurado
+    // 4. Enviar o e-mail
     await transporter.sendMail({
-      from: `"Vitrine de E-books" <${process.env.GMAIL_EMAIL || process.env.SMTP_USER}>`,
+      from: `"Vitrine de E-books" <${emailRemetente}>`,
       to: email,
       subject: assunto,
       html: mensagemHtml,

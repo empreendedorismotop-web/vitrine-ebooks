@@ -49,11 +49,9 @@ export default function AdminPage() {
   const [autorizado, setAutorizado] = useState(false) 
   const [isClient, setIsClient] = useState(false) 
 
-  // Estados dos Leads do Exit Popup
   const [leadsExit, setLeadsExit] = useState<any[]>([])
   const [filtroSegmentoLead, setFiltroSegmentoLead] = useState('todos')
 
-  // Estados de Configuração dos Popups (AGORA COM O CAMPO email_botao_texto)
   const [popupLeitor, setPopupLeitor] = useState({
     titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: '', email_botao_texto: ''
   })
@@ -62,12 +60,10 @@ export default function AdminPage() {
   })
   const [salvandoPopup, setSalvandoPopup] = useState(false)
 
-  // Estados da Biblioteca Grátis
   const [biblioteca, setBiblioteca] = useState<any[]>([])
   const [novoEbookGratis, setNovoEbookGratis] = useState({ titulo: '', imagem_url: '', link_download: '' })
   const [uploadingGratis, setUploadingGratis] = useState(false)
 
-  // ⚠️ SEU E-MAIL DEFINIDO AQUI ⚠️
   const EMAIL_ADMIN = 'josevg10@gmail.com' 
 
   const [perfis, setPerfis] = useState<Perfil[]>([])
@@ -114,8 +110,9 @@ export default function AdminPage() {
   
   const [filtroListaAtual, setFiltroListaAtual] = useState('todos')
 
+  // ⚠️ ADICIONADO: provedor_ativo no state ⚠️
   const [configEmail, setConfigEmail] = useState({
-    gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_remetente: ''
+    gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_remetente: '', provedor_ativo: 'gmail'
   })
   const [salvandoConfig, setSalvandoConfig] = useState(false)
 
@@ -1477,9 +1474,25 @@ export default function AdminPage() {
             </div>
             
             <form onSubmit={salvarConfiguracoesEmail} className="p-6 space-y-8">
+
+              {/* ⚠️ AQUI ESTÁ A CENTRAL DE COMANDO ⚠️ */}
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Servidor Padrão do Sistema</h3>
+                <div className="bg-slate-100 p-4 rounded-xl mb-8 border border-slate-200">
+                  <label className="block text-sm font-bold text-slate-900 mb-2">Qual servidor deve enviar as mensagens automáticas?</label>
+                  <select 
+                    value={configEmail.provedor_ativo || 'gmail'} 
+                    onChange={e => setConfigEmail({...configEmail, provedor_ativo: e.target.value})} 
+                    className="w-full p-3 border border-slate-300 bg-white rounded-lg font-bold outline-none focus:border-slate-500"
+                  >
+                    <option value="gmail">🟢 Usar Gmail</option>
+                    <option value="externo">🟣 Usar SMTP Externo</option>
+                  </select>
+                </div>
+              </div>
               
               <div>
-                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Servidor Gmail (Padrão)</h3>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Servidor Gmail</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">E-mail do Gmail</label>
@@ -1505,7 +1518,7 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">SMTP Externo (Lotes Grandes)</h3>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">SMTP Externo</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
