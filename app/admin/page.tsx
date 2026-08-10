@@ -53,12 +53,12 @@ export default function AdminPage() {
   const [leadsExit, setLeadsExit] = useState<any[]>([])
   const [filtroSegmentoLead, setFiltroSegmentoLead] = useState('todos')
 
-  // Estados de Configuração dos Popups
+  // Estados de Configuração dos Popups (AGORA COM O CAMPO email_botao_texto)
   const [popupLeitor, setPopupLeitor] = useState({
-    titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: ''
+    titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: '', email_botao_texto: ''
   })
   const [popupAutor, setPopupAutor] = useState({
-    titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: ''
+    titulo: '', subtitulo: '', botao_texto: '', imagem_url: '', ebook_link: '', email_assunto: '', email_corpo: '', email_botao_texto: ''
   })
   const [salvandoPopup, setSalvandoPopup] = useState(false)
 
@@ -147,8 +147,8 @@ export default function AdminPage() {
       if (data) {
         const leitor = data.find((d: any) => d.segmento === 'leitor')
         const autor = data.find((d: any) => d.segmento === 'autor')
-        if (leitor) setPopupLeitor(leitor)
-        if (autor) setPopupAutor(autor)
+        if (leitor) setPopupLeitor({ ...popupLeitor, ...leitor })
+        if (autor) setPopupAutor({ ...popupAutor, ...autor })
       }
     } catch (e) {
       console.warn('Tabela popup_configs ainda não existe ou ocorreu um erro.')
@@ -810,7 +810,7 @@ export default function AdminPage() {
             🧲 Textos do Popup
           </button>
 
-          {/* ⚠️ NOVO BOTÃO DA BIBLIOTECA GRÁTIS ⚠️ */}
+          {/* BOTÃO DA BIBLIOTECA GRÁTIS */}
           <button onClick={() => setAbaAtiva('biblioteca')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${abaAtiva === 'biblioteca' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}>
             📚 Biblioteca Grátis
           </button>
@@ -891,7 +891,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ⚠️ NOVA ABA: CONFIGURAR TEXTOS DOS POPUPS */}
+        {/* ⚠️ NOVA ABA: CONFIGURAR TEXTOS DOS POPUPS ⚠️ */}
         {abaAtiva === 'popups' && (
           <div className="grid lg:grid-cols-2 gap-8">
             
@@ -911,7 +911,8 @@ export default function AdminPage() {
                 <div className="pt-4 border-t border-slate-100">
                   <p className="font-bold text-sm text-slate-900 mb-3">E-mail de Entrega</p>
                   <div><label className="block text-xs font-bold text-slate-700 mb-1">Assunto do E-mail</label><input required value={popupLeitor.email_assunto} onChange={e => setPopupLeitor({...popupLeitor, email_assunto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Seu E-book chegou!" /></div>
-                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Corpo do E-mail (Use <strong className="text-pink-600">[LINK]</strong> onde o botão de baixar deve aparecer)</label><textarea required rows={4} value={popupLeitor.email_corpo} onChange={e => setPopupLeitor({...popupLeitor, email_corpo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Olá! Aqui está: [LINK]" /></div>
+                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Texto do Botão no E-mail</label><input required value={popupLeitor.email_botao_texto || ''} onChange={e => setPopupLeitor({...popupLeitor, email_botao_texto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Ex: Baixar Meu E-book Agora" /></div>
+                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Corpo do E-mail (O botão será inserido onde você digitar <strong className="text-pink-600">[BOTAO]</strong>)</label><textarea required rows={4} value={popupLeitor.email_corpo} onChange={e => setPopupLeitor({...popupLeitor, email_corpo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Olá! Aqui está: [BOTAO]" /></div>
                 </div>
 
                 <button type="submit" disabled={salvandoPopup} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50">
@@ -936,7 +937,8 @@ export default function AdminPage() {
                 <div className="pt-4 border-t border-slate-100">
                   <p className="font-bold text-sm text-slate-900 mb-3">E-mail de Entrega</p>
                   <div><label className="block text-xs font-bold text-slate-700 mb-1">Assunto do E-mail</label><input required value={popupAutor.email_assunto} onChange={e => setPopupAutor({...popupAutor, email_assunto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Seu material chegou!" /></div>
-                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Corpo do E-mail (Use <strong className="text-pink-600">[LINK]</strong> onde o botão de baixar deve aparecer)</label><textarea required rows={4} value={popupAutor.email_corpo} onChange={e => setPopupAutor({...popupAutor, email_corpo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Olá! Aqui está o manual: [LINK]" /></div>
+                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Texto do Botão no E-mail</label><input required value={popupAutor.email_botao_texto || ''} onChange={e => setPopupAutor({...popupAutor, email_botao_texto: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Ex: Baixar Meu Manual" /></div>
+                  <div className="mt-3"><label className="block text-xs font-bold text-slate-700 mb-1">Corpo do E-mail (O botão será inserido onde você digitar <strong className="text-pink-600">[BOTAO]</strong>)</label><textarea required rows={4} value={popupAutor.email_corpo} onChange={e => setPopupAutor({...popupAutor, email_corpo: e.target.value})} className="w-full p-2 border rounded outline-none text-sm" placeholder="Olá! Aqui está o manual: [BOTAO]" /></div>
                 </div>
 
                 <button type="submit" disabled={salvandoPopup} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50">

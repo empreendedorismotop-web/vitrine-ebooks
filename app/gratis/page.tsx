@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
-import { Lock, Download, Star, ChevronRight, BookOpen, Heart } from 'lucide-react'
+import { Lock, Download, Star, ChevronRight, BookOpen, Heart, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function BibliotecaGratis() {
@@ -15,6 +15,10 @@ export default function BibliotecaGratis() {
   
   const [ebooksG, setEbooksG] = useState<any[]>([])
   const [ebooksPagos, setEbooksPagos] = useState<any[]>([])
+
+  // Estados para o "Carregar Mais" da vitrine Premium
+  const [paginaPremium, setPaginaPremium] = useState(1)
+  const [carregandoMaisPremium, setCarregandoMaisPremium] = useState(false)
 
   useEffect(() => {
     const destravado = localStorage.getItem('acesso_biblioteca')
@@ -27,7 +31,7 @@ export default function BibliotecaGratis() {
       const { data: gratis } = await supabase.from('ebooks_gratis').select('*').order('created_at', { ascending: false })
       if (gratis) setEbooksG(gratis)
 
-      // ⚠️ Busca TODOS os Pagos Ativos (Sem Limite) ⚠️
+      // Busca TODOS os Pagos Ativos (Sem Limite)
       const { data: pagos } = await supabase.from('profiles').select('*').eq('status', 'ativo')
       if (pagos) setEbooksPagos(pagos.sort(() => Math.random() - 0.5)) 
     }
@@ -52,6 +56,19 @@ export default function BibliotecaGratis() {
       alert('Ocorreu um erro. Tente novamente.')
     }
     setCarregando(false)
+  }
+
+  // Lógica de Paginação dos Premium
+  const ITEMS_POR_PAGINA = 12
+  const premiumNaTela = ebooksPagos.slice(0, paginaPremium * ITEMS_POR_PAGINA)
+  const temMaisPremium = ebooksPagos.length > premiumNaTela.length
+
+  const carregarMaisPremium = () => {
+    setCarregandoMaisPremium(true)
+    setTimeout(() => {
+      setPaginaPremium(prev => prev + 1)
+      setCarregandoMaisPremium(false)
+    }, 500)
   }
 
   return (
@@ -105,7 +122,7 @@ export default function BibliotecaGratis() {
           
           <div className="max-w-7xl mx-auto px-4">
             
-            {/* ⚠️ GRID GRÁTIS: 2 COLUNAS NO MOBILE ⚠️ */}
+            {/* GRID GRÁTIS */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 mb-20">
               {ebooksG.map(ebook => (
                 <div key={ebook.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col group hover:shadow-xl hover:-translate-y-1 transition-all">
@@ -128,6 +145,7 @@ export default function BibliotecaGratis() {
               )}
             </div>
 
+            {/* RECOMENDAÇÕES PREMIUM */}
             {ebooksPagos.length > 0 && (
               <div className="pt-16 border-t border-slate-200 relative">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-6">
@@ -139,9 +157,8 @@ export default function BibliotecaGratis() {
                   <p className="text-xs sm:text-base text-slate-500">Gostou dos e-books grátis? Dê o próximo passo com nossos materiais avançados.</p>
                 </div>
 
-                {/* ⚠️ GRID PREMIUM: 2 COLUNAS NO MOBILE ⚠️ */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-                  {ebooksPagos.map(perfil => (
+                  {premiumNaTela.map(perfil => (
                     <Link href={`/ebook/${perfil.id}?origem=Biblioteca Gratis (Premium)`} key={perfil.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col group hover:shadow-lg transition-all relative">
                       <div className="h-32 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-200 p-2 sm:p-4 flex justify-center items-center relative">
                         <img src={perfil.imagem_url || '/placeholder-book.png'} alt={perfil.titulo_ebook} className="h-full w-auto object-contain drop-shadow-lg group-hover:scale-110 transition-transform duration-500" />
@@ -159,6 +176,23 @@ export default function BibliotecaGratis() {
                     </Link>
                   ))}
                 </div>
+
+                {/* BOTÃO CARREGAR MAIS */}
+                {temMaisPremium && (
+                  <div className="mt-12 flex justify-center w-full pb-8">
+                    <button 
+                      onClick={carregarMaisPremium}
+                      disabled={carregandoMaisPremium}
+                      className="w-full sm:w-auto px-12 py-4 bg-slate-900 hover:bg-slate-800 text-white text-lg font-bold rounded-2xl shadow-[0_8px_30px_rgb(15,23,42,0.3)] transition-all hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-3"
+                    >
+                      {carregandoMaisPremium ? (
+                        <><Loader2 className="size-6 animate-spin" /> Carregando...</>
+                      ) : (
+                        'Ver Mais Recomendações'
+                      )}
+                    </button>
+                  </div>
+                )}
 
               </div>
             )}

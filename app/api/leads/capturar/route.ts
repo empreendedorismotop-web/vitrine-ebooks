@@ -34,29 +34,30 @@ export async function POST(req: Request) {
       throw new Error('Erro ao salvar no banco de dados')
     }
 
-    // 2. Definir o conteúdo do e-mail conforme o segmento
-    let assunto = ''
-    let mensagemHtml = ''
+    // 2. Buscar dinamicamente as configurações do popup/e-mail no banco
+    const { data: config } = await supabase
+      .from('popup_configs')
+      .select('*')
+      .eq('segmento', segmento)
+      .single()
 
-    if (segmento === 'leitor') {
-      assunto = '📚 Seu E-book Grátis de Leitor chegou!'
-      mensagemHtml = `
-        <h2>Olá! Que bom ter você por aqui.</h2>
-        <p>Conforme prometido, aqui está o link para baixar o seu e-book exclusivo:</p>
-        <p><a href="https://vitrine-ebooks.vercel.app" style="background:#ea580c;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">Baixar E-book de Leitores</a></p>
-        <p>Bom proveito da leitura!</p>
-      `
-    } else {
-      assunto = '🚀 Seu Guia de Anúncios e Vendas chegou!'
-      mensagemHtml = `
-        <h2>Olá, futuro parceiro!</h2>
-        <p>Aqui está o seu material estratégico para destacar suas obras em nossa vitrine:</p>
-        <p><a href="https://vitrine-ebooks.vercel.app" style="background:#ea580c;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">Baixar Guia para Anunciantes</a></p>
-        <p>Bons negócios e ótimas vendas!</p>
-      `
-    }
+    // Valores padrão de segurança caso a tabela não tenha registros
+    let assunto = config?.email_assunto || (segmento === 'leitor' ? '📚 Seu E-book Grátis chegou!' : '🚀 Seu Guia de Anúncios chegou!')
+    let ebookLink = config?.ebook_link || 'https://vitrine-ebooks.vercel.app'
+    let textoBotao = config?.email_botao_texto || 'Baixar Material'
+    let corpoEmail = config?.email_corpo || '<p>Olá! Aqui está o seu material exclusivo:</p><p>[BOTAO]</p>'
 
-    // 3. Enviar o e-mail via SMTP configurado
+    // 3. Montar o botão HTML customizado com o link e o texto configurados no admin
+    const botaoHtml = `
+      <a href="${ebookLink}" target="_blank" style="background:#ea580c;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:bold;font-family:sans-serif;">
+        ${textoBotao}
+      </a>
+    `
+
+    // Substitui a tag [BOTAO] pelo botão real no texto do e-mail
+    const mensagemHtml = corpoEmail.replace('[BOTAO]', botaoHtml)
+
+    // 4. Enviar o e-mail via SMTP configurado
     await transporter.sendMail({
       from: `"Vitrine de E-books" <${process.env.GMAIL_EMAIL || process.env.SMTP_USER}>`,
       to: email,

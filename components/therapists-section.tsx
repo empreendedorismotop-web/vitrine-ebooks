@@ -141,18 +141,18 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
         </div>
       )}
 
-      {/* Botão de Carregar Mais Moderno */}
+      {/* Botão de Carregar Mais Moderno e Destacado */}
       {temMaisEbooks && (
-        <div className="mt-8 flex justify-center">
+        <div className="mt-12 flex justify-center w-full pb-8">
           <button 
             onClick={carregarMaisEbooks}
             disabled={carregandoMais}
-            className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md disabled:opacity-70 transition-all flex items-center gap-2"
+            className="w-full sm:w-auto px-12 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-2xl shadow-[0_8px_30px_rgb(5,150,105,0.4)] transition-all hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-3"
           >
             {carregandoMais ? (
-              <><Loader2 className="size-5 animate-spin" /> Processando...</>
+              <><Loader2 className="size-6 animate-spin" /> Carregando E-books...</>
             ) : (
-              'Carregar Mais E-books'
+              'Ver Mais E-books'
             )}
           </button>
         </div>

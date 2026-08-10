@@ -4,34 +4,44 @@ import { supabase } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   try {
-    // Adicionamos o "provedor" para saber qual servidor usar
     const { assunto, mensagem, clientes, textoBotao, urlBotao, provedor } = await request.json()
 
-    let configTransportador;
+    let transporter;
+    let emailRemetente = '';
 
-    // Lógica inteligente de escolha do motor de envio
     if (provedor === 'externo') {
-      configTransportador = {
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT) || 465,
-        secure: Number(process.env.SMTP_PORT) === 465, // true para 465, false para portas como 587
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        }
+      // ⚠️ BUSCA CONFIGURAÇÕES NO BANCO DE DADOS ⚠️
+      const { data: config, error: configError } = await supabase
+        .from('configuracoes')
+        .select('*')
+        .eq('id', 1)
+        .single()
+
+      if (configError || !config) {
+        throw new Error("Configurações SMTP não encontradas no banco de dados. Configure-as no Admin.");
       }
+
+      transporter = nodemailer.createTransport({
+        host: config.smtp_host,
+        port: Number(config.smtp_port),
+        secure: Number(config.smtp_port) === 465, 
+        auth: {
+          user: config.smtp_user,
+          pass: config.smtp_pass,
+        }
+      })
+      emailRemetente = config.smtp_remetente
     } else {
-      // Padrão de segurança: Continua usando o Gmail
-      configTransportador = {
+      // Padrão Gmail
+      transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: process.env.GMAIL_EMAIL,
           pass: process.env.GMAIL_SENHA
         }
-      }
+      })
+      emailRemetente = process.env.GMAIL_EMAIL || ''
     }
-
-    const transporter = nodemailer.createTransport(configTransportador)
 
     const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://vitrine-ebooks.vercel.app').replace(/\/$/, '')
 
@@ -44,7 +54,7 @@ export async function POST(request: Request) {
       const htmlMensagem = `
         <div style="font-family: sans-serif; color: #0f172a; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
             <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-bottom: 1px solid #e2e8f0;">
-                <h2 style="color: #1e3a8a; margin: 0;">Vitrine E-books & Cursos</h2>
+              <h2 style="color: #1e3a8a; margin: 0;">Vitrine E-books & Cursos</h2>
             </div>
             <div style="padding: 30px;">
                 <p style="font-size: 16px;">Olá, <strong>${cliente.nome}</strong>!</p>
@@ -60,9 +70,6 @@ export async function POST(request: Request) {
         </div>
       `
 
-      // Define quem é o remetente com base no provedor escolhido
-      const emailRemetente = provedor === 'externo' ? process.env.SMTP_USER : process.env.GMAIL_EMAIL;
-
       await transporter.sendMail({
         from: `"Equipe Vitrine" <${emailRemetente}>`,
         to: cliente.email,
@@ -70,13 +77,19 @@ export async function POST(request: Request) {
         html: htmlMensagem
       })
 
+      // Atualiza o histórico em ambas as tabelas (profiles ou leads)
       const hoje = new Date().toISOString()
-      await supabase.from('profiles').update({ ultimo_email_enviado: hoje }).eq('id', cliente.id)
+      if (cliente.id.startsWith('lead_')) {
+        const emailReal = cliente.email
+        await supabase.from('leads').update({ ultimo_email_enviado: hoje }).eq('email', emailReal)
+      } else {
+        await supabase.from('profiles').update({ ultimo_email_enviado: hoje }).eq('id', cliente.id)
+      }
     }
 
     return NextResponse.json({ success: true, enviados: clientes.length })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro no envio do lote:', error)
-    return NextResponse.json({ error: 'Falha ao processar lote.' }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
