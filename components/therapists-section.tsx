@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { TherapistCard } from './therapist-card'
-import { ChevronRight, ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 
 // Mostra 40 por vez
 const ITEMS_POR_CARREGAMENTO = 40 
@@ -14,8 +14,6 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
   const [loading, setLoading] = useState(true)
   const [carregandoMais, setCarregandoMais] = useState(false)
   const [paginaExibida, setPaginaExibida] = useState(1)
-
-  const carrosselRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     carregarEbooks()
@@ -94,14 +92,6 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
     }, 500)
   }
 
-  const rolarEsquerda = () => {
-    if (carrosselRef.current) carrosselRef.current.scrollBy({ left: -300, behavior: 'smooth' })
-  }
-
-  const rolarDireita = () => {
-    if (carrosselRef.current) carrosselRef.current.scrollBy({ left: 300, behavior: 'smooth' })
-  }
-
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 text-emerald-600 gap-3">
       <Loader2 className="size-8 animate-spin" />
@@ -134,40 +124,17 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
       </div>
 
       {ebooksVisiveis.length > 0 ? (
-        <div className="relative group">
-          
-          {/* Botão de Rolar Esquerda (Só aparece no Mobile) */}
-          <button 
-            onClick={rolarEsquerda}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -ml-2 z-20 bg-white border border-slate-200 text-slate-600 p-2 rounded-full shadow-lg hover:bg-slate-50 transition-all md:hidden flex items-center justify-center"
-          >
-            <ChevronLeft className="size-5" />
-          </button>
-
-          {/* O GRID HÍBRIDO (Rola pro lado no Celular, Desce normal no PC) */}
-          <div 
-            ref={carrosselRef}
-            className="flex md:grid gap-6 overflow-x-auto md:overflow-visible pb-6 snap-x snap-mandatory md:snap-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-          >
-            {ebooksNaTela.map((ebook) => (
-              <div key={ebook.id} className="snap-start shrink-0 w-[80vw] sm:w-[300px] md:w-auto">
-                
-                {/* O Cartão Inteligente agora resolve tudo sozinho (Favoritos, Cliques, Redirecionamento) */}
-                <TherapistCard therapist={ebook} origem={origem} />
-              
-              </div>
-            ))}
-          </div>
-
-          {/* Botão de Rolar Direita (Só aparece no Mobile) */}
-          <button 
-            onClick={rolarDireita}
-            className="absolute right-0 top-1/2 -translate-y-1/2 -mr-2 z-20 bg-white border border-slate-200 text-slate-600 p-2 rounded-full shadow-lg hover:bg-slate-50 transition-all md:hidden flex items-center justify-center"
-          >
-            <ChevronRight className="size-5" />
-          </button>
-
+        
+        /* ⚠️ A NOVA GRADE (GRID): 2 Colunas Mobile, 3 Tablet, 4/5 Computador ⚠️ */
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
+          {ebooksNaTela.map((ebook) => (
+            <div key={ebook.id} className="w-full">
+              {/* O Cartão Inteligente agora resolve tudo sozinho (Favoritos, Cliques, Redirecionamento) */}
+              <TherapistCard therapist={ebook} origem={origem} />
+            </div>
+          ))}
         </div>
+
       ) : (
         <div className="text-center py-20 bg-slate-50 rounded-2xl border border-slate-100">
           <p className="text-slate-500 font-medium text-lg">Nenhum e-book encontrado para esta busca.</p>

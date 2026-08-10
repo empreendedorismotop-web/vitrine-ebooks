@@ -214,27 +214,27 @@ export default function HomePage() {
 
                  <div 
                     ref={carouselRef}
-                    className="flex gap-6 overflow-x-auto pb-6 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden relative z-10"
+                    className="flex gap-4 sm:gap-6 overflow-x-auto pb-6 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden relative z-10"
                  >
                     {vips.map(vip => (
-                        <div key={vip.id} className="snap-start shrink-0 w-[280px] md:w-[320px] bg-white rounded-2xl shadow-sm border border-amber-200 overflow-hidden flex flex-col relative transition-all hover:shadow-md hover:border-amber-300">
+                        <div key={vip.id} className="snap-start shrink-0 w-[160px] sm:w-[280px] md:w-[320px] bg-white rounded-2xl shadow-sm border border-amber-200 overflow-hidden flex flex-col relative transition-all hover:shadow-md hover:border-amber-300">
                            
-                           {/* Botão de Favorito no Canto Superior Esquerdo */}
+                           {/* Botão de Favorito - Reduzido no Mobile */}
                            <button 
                              onClick={(e) => { e.preventDefault(); toggleFavorito(vip); }}
-                             className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm p-2 rounded-full z-20 shadow-sm hover:scale-110 transition-transform group/fav"
+                             className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-white/90 backdrop-blur-sm p-1.5 sm:p-2 rounded-full z-20 shadow-sm hover:scale-110 transition-transform group/fav"
                              title="Salvar nos favoritos"
                            >
                              <Heart 
-                               className={`size-5 transition-colors duration-300 ${favoritos.includes(vip.id) ? 'fill-red-500 text-red-500' : 'text-slate-400 group-hover/fav:text-red-400'}`} 
+                               className={`size-4 sm:size-5 transition-colors duration-300 ${favoritos.includes(vip.id) ? 'fill-red-500 text-red-500' : 'text-slate-400 group-hover/fav:text-red-400'}`} 
                              />
                            </button>
 
-                           <div className="absolute top-3 right-3 bg-amber-400 text-amber-950 text-[10px] font-bold px-2 py-1 rounded-md z-10 shadow-sm flex items-center gap-1">
-                              <Star className="size-3 fill-amber-950" /> DESTAQUE
+                           <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-amber-400 text-amber-950 text-[8px] sm:text-[10px] font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md z-10 shadow-sm flex items-center gap-1">
+                              <Star className="size-2 sm:size-3 fill-amber-950" /> DESTAQUE
                            </div>
                            
-                           <div className="h-[280px] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center p-6">
+                           <div className="h-[180px] sm:h-[280px] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center p-3 sm:p-6">
                               <img 
                                 src={vip.imagem_url || '/placeholder-book.png'} 
                                 alt={vip.titulo_ebook} 
@@ -242,19 +242,19 @@ export default function HomePage() {
                               />
                            </div>
                            
-                           <div className="p-5 flex flex-col flex-1 border-t border-slate-100">
-                              <div className="flex justify-between items-center mb-2">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider line-clamp-1">POR {vip.nome}</p>
+                           <div className="p-3 sm:p-5 flex flex-col flex-1 border-t border-slate-100">
+                              <div className="flex justify-between items-center mb-1 sm:mb-2">
+                                <p className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider line-clamp-1">POR {vip.nome}</p>
                                 {vip.favoritos_count > 0 && (
-                                  <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
-                                    <Heart className="size-3 fill-red-500" /> {vip.favoritos_count}
+                                  <span className="text-[9px] sm:text-[10px] font-bold text-red-500 flex items-center gap-1">
+                                    <Heart className="size-2.5 sm:size-3 fill-red-500" /> {vip.favoritos_count}
                                   </span>
                                 )}
                               </div>
-                              <h3 className="font-serif font-bold text-lg text-slate-900 mb-4 line-clamp-2">{vip.titulo_ebook}</h3>
+                              <h3 className="font-serif font-bold text-sm sm:text-lg text-slate-900 mb-3 sm:mb-4 line-clamp-2">{vip.titulo_ebook}</h3>
                               
                               <div className="mt-auto">
-                                 <Link href={`/ebook/${vip.id}?origem=Vitrine Principal (Carrossel VIP)`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors shadow-sm">
+                                 <Link href={`/ebook/${vip.id}?origem=Vitrine Principal (Carrossel VIP)`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 sm:py-3.5 rounded-lg sm:rounded-xl text-xs sm:text-sm transition-colors shadow-sm">
                                     Mais Detalhes
                                  </Link>
                               </div>
@@ -274,7 +274,7 @@ export default function HomePage() {
             </section>
         )}
 
-        {/* GRADE ORIGINAL DOS PRODUTOS */}
+        {/* GRADE ORIGINAL DOS PRODUTOS (A grade principal que lista tudo) */}
         <TherapistsSection searchQuery={searchQuery} />
 
         <section className="bg-secondary/10 py-12 md:py-16 w-full overflow-hidden">

@@ -17,7 +17,6 @@ export default function BibliotecaGratis() {
   const [ebooksPagos, setEbooksPagos] = useState<any[]>([])
 
   useEffect(() => {
-    // Verifica se a pessoa já destravou a biblioteca alguma vez na vida
     const destravado = localStorage.getItem('acesso_biblioteca')
     if (destravado === 'true') {
       setAcessoLiberado(true)
@@ -28,9 +27,9 @@ export default function BibliotecaGratis() {
       const { data: gratis } = await supabase.from('ebooks_gratis').select('*').order('created_at', { ascending: false })
       if (gratis) setEbooksG(gratis)
 
-      // Busca os Pagos (Status Ativo) para a vitrine de recomendação
-      const { data: pagos } = await supabase.from('profiles').select('*').eq('status', 'ativo').limit(8)
-      if (pagos) setEbooksPagos(pagos.sort(() => Math.random() - 0.5)) // Mistura os pagos
+      // ⚠️ Busca TODOS os Pagos Ativos (Sem Limite) ⚠️
+      const { data: pagos } = await supabase.from('profiles').select('*').eq('status', 'ativo')
+      if (pagos) setEbooksPagos(pagos.sort(() => Math.random() - 0.5)) 
     }
     buscarEbooks()
   }, [])
@@ -39,7 +38,6 @@ export default function BibliotecaGratis() {
     e.preventDefault()
     setCarregando(true)
 
-    // Salva o lead no banco de dados no segmento "leitor"
     const res = await fetch('/api/leads/capturar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -61,7 +59,6 @@ export default function BibliotecaGratis() {
       <SiteHeader />
       <main className="min-h-screen bg-slate-50 py-12 relative overflow-hidden">
         
-        {/* CABEÇALHO DA PÁGINA */}
         <div className="max-w-4xl mx-auto text-center px-4 mb-12">
           <span className="bg-orange-100 text-orange-800 text-sm font-bold px-4 py-1.5 rounded-full inline-block mb-4">
             Acesso Exclusivo
@@ -74,7 +71,6 @@ export default function BibliotecaGratis() {
           </p>
         </div>
 
-        {/* CADEADO: SE NÃO TIVER ACESSO */}
         {!acessoLiberado ? (
           <div className="max-w-md mx-auto px-4 relative z-10">
             <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-200 text-center relative overflow-hidden">
@@ -99,7 +95,6 @@ export default function BibliotecaGratis() {
               </form>
             </div>
             
-            {/* Borrão no fundo para dar ideia de que os livros estão atrás */}
             <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 opacity-20 blur-sm pointer-events-none select-none grayscale">
                {[1,2,3,4].map(i => (
                  <div key={i} className="aspect-[3/4] bg-slate-300 rounded-xl shadow-lg"></div>
@@ -108,32 +103,31 @@ export default function BibliotecaGratis() {
           </div>
         ) : (
           
-          /* BIBLIOTECA LIBERADA */
           <div className="max-w-7xl mx-auto px-4">
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 mb-20">
+            {/* ⚠️ GRID GRÁTIS: 2 COLUNAS NO MOBILE ⚠️ */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 mb-20">
               {ebooksG.map(ebook => (
                 <div key={ebook.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col group hover:shadow-xl hover:-translate-y-1 transition-all">
-                  <div className="aspect-[3/4] bg-slate-100 p-4 flex items-center justify-center relative overflow-hidden">
-                    <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm z-10">
+                  <div className="aspect-[3/4] bg-slate-100 p-2 sm:p-4 flex items-center justify-center relative overflow-hidden">
+                    <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[8px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded uppercase tracking-wider shadow-sm z-10">
                       GRÁTIS
                     </div>
                     <img src={ebook.imagem_url} alt={ebook.titulo} className="w-full h-full object-cover rounded shadow-md group-hover:scale-105 transition-transform duration-500" />
                   </div>
-                  <div className="p-4 flex flex-col flex-1">
-                    <h3 className="font-bold text-slate-900 text-sm mb-4 line-clamp-2">{ebook.titulo}</h3>
-                    <a href={ebook.link_download} target="_blank" rel="noopener noreferrer" className="mt-auto block w-full text-center bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
-                      <Download className="size-4" /> Baixar
+                  <div className="p-3 sm:p-4 flex flex-col flex-1">
+                    <h3 className="font-bold text-slate-900 text-xs sm:text-sm mb-3 line-clamp-2">{ebook.titulo}</h3>
+                    <a href={ebook.link_download} target="_blank" rel="noopener noreferrer" className="mt-auto block w-full text-center bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5">
+                      <Download className="size-3 sm:size-4" /> Baixar
                     </a>
                   </div>
                 </div>
               ))}
               {ebooksG.length === 0 && (
-                <div className="col-span-full py-12 text-center text-slate-500 font-bold">Novos e-books gratuitos chegarão em breve!</div>
+                <div className="col-span-full py-12 text-center text-slate-500 font-bold text-sm">Novos e-books gratuitos chegarão em breve!</div>
               )}
             </div>
 
-            {/* 🔥 A ESTRATÉGIA DE VENDAS: RECOMENDAÇÕES PREMIUM 🔥 */}
             {ebooksPagos.length > 0 && (
               <div className="pt-16 border-t border-slate-200 relative">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-6">
@@ -141,29 +135,31 @@ export default function BibliotecaGratis() {
                 </div>
                 
                 <div className="text-center mb-10">
-                  <h2 className="text-3xl font-serif font-bold text-slate-900 mb-2">Recomendações Premium</h2>
-                  <p className="text-slate-500">Gostou dos e-books grátis? Dê o próximo passo com nossos materiais avançados.</p>
+                  <h2 className="text-2xl sm:text-3xl font-serif font-bold text-slate-900 mb-2">Recomendações Premium</h2>
+                  <p className="text-xs sm:text-base text-slate-500">Gostou dos e-books grátis? Dê o próximo passo com nossos materiais avançados.</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* ⚠️ GRID PREMIUM: 2 COLUNAS NO MOBILE ⚠️ */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
                   {ebooksPagos.map(perfil => (
                     <Link href={`/ebook/${perfil.id}?origem=Biblioteca Gratis (Premium)`} key={perfil.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col group hover:shadow-lg transition-all relative">
-                      <div className="h-48 bg-gradient-to-br from-slate-100 to-slate-200 p-4 flex justify-center items-center relative">
-                        <img src={perfil.imagem_url} alt={perfil.titulo_ebook} className="h-full w-auto object-contain drop-shadow-lg group-hover:scale-110 transition-transform duration-500" />
+                      <div className="h-32 sm:h-48 bg-gradient-to-br from-slate-100 to-slate-200 p-2 sm:p-4 flex justify-center items-center relative">
+                        <img src={perfil.imagem_url || '/placeholder-book.png'} alt={perfil.titulo_ebook} className="h-full w-auto object-contain drop-shadow-lg group-hover:scale-110 transition-transform duration-500" />
                       </div>
-                      <div className="p-5 flex flex-col flex-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Por {perfil.nome}</p>
-                        <h3 className="font-serif font-bold text-slate-900 line-clamp-2 mb-3">{perfil.titulo_ebook}</h3>
+                      <div className="p-3 sm:p-5 flex flex-col flex-1">
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase mb-1 line-clamp-1">Por {perfil.nome}</p>
+                        <h3 className="font-serif font-bold text-sm sm:text-base text-slate-900 line-clamp-2 mb-2 sm:mb-3">{perfil.titulo_ebook}</h3>
                         <div className="mt-auto flex items-center justify-between">
-                          <span className="text-emerald-600 font-bold text-sm flex items-center gap-1">Ver Oferta <ChevronRight className="size-4" /></span>
+                          <span className="text-emerald-600 font-bold text-xs sm:text-sm flex items-center gap-1">Ver Oferta <ChevronRight className="size-3 sm:size-4" /></span>
                           {perfil.favoritos_count > 0 && (
-                            <span className="flex items-center gap-1 text-xs text-red-500 font-bold"><Heart className="size-3 fill-red-500" /> {perfil.favoritos_count}</span>
+                            <span className="flex items-center gap-1 text-[10px] sm:text-xs text-red-500 font-bold"><Heart className="size-3 fill-red-500" /> {perfil.favoritos_count}</span>
                           )}
                         </div>
                       </div>
                     </Link>
                   ))}
                 </div>
+
               </div>
             )}
           </div>
