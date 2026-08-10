@@ -93,7 +93,7 @@ export function BannerPush() {
            <button 
              onClick={assinarNotificacoes}
              disabled={loading}
-             className="w-full md:w-auto bg-white text-orange-600 hover:bg-slate-50 font-bold text-lg px-8 py-4 rounded-xl shadow-lg transition-transform hover:-translate-y-1 flex items-center justify-center gap-3 disabled:opacity-80"
+             className="w-full md:w-auto bg-white text-orange-600 hover:bg-slate-20 font-bold text-lg px-8 py-4 rounded-xl shadow-lg transition-transform hover:-translate-y-1 flex items-center justify-center gap-3 disabled:opacity-80"
            >
              {loading ? <Loader2 className="size-5 animate-spin" /> : <BellRing className="size-5" />}
              {loading ? 'Preparando...' : 'Sim, Quero Receber!'}
