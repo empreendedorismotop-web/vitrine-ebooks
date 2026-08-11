@@ -6,8 +6,6 @@ import { supabase } from '@/lib/supabase'
 
 // --- DEFINICAO DOS PLANOS ---
 const PLANOS_PADRAO = [
-  { id: 'padrao_1_mes', nome: '1 Mes', valor: 'R$ 19,90', detalhe: 'Plano inicial na vitrine' },
-  { id: 'padrao_2_meses', nome: '2 Meses', valor: 'R$ 37,90', detalhe: 'R$ 18,95 / mes' },
   { id: 'padrao_3_meses', nome: '3 Meses', valor: 'R$ 54,90', detalhe: 'R$ 18,30 / mes' },
   { id: 'padrao_6_meses', nome: '6 Meses', valor: 'R$ 99,90', detalhe: 'R$ 16,65 / mes', destaque: true },
   { id: 'padrao_12_meses', nome: '12 Meses', valor: 'R$ 179,90', detalhe: 'R$ 14,99 / mes - Maior desconto' }
@@ -15,7 +13,6 @@ const PLANOS_PADRAO = [
 
 // Valores ajustados para testar uma melhor taxa de conversao
 const PLANOS_VIP = [
-  { id: 'vip_1_mes', nome: '1 Mes VIP', valor: 'R$ 39,90', detalhe: 'Carrossel + Vitrine' },
   { id: 'vip_3_meses', nome: '3 Meses VIP', valor: 'R$ 99,90', detalhe: 'R$ 33,30 / mes' },
   { id: 'vip_6_meses', nome: '6 Meses VIP', valor: 'R$ 179,90', detalhe: 'R$ 29,98 / mes', destaque: true },
   { id: 'vip_12_meses', nome: '12 Meses VIP', valor: 'R$ 299,90', detalhe: 'R$ 24,99 / mes - Dominancia Total' }
