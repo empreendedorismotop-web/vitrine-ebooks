@@ -16,6 +16,9 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
   const [paginaExibida, setPaginaExibida] = useState(1)
 
   useEffect(() => {
+    // Limpa o cache antigo para forçar uma leitura limpa do banco
+    localStorage.removeItem('@vitrine-grade-cache')
+    localStorage.removeItem('@vitrine-grade-time')
     carregarEbooks()
   }, [])
 
@@ -29,41 +32,18 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
 
   const carregarEbooks = async () => {
     setLoading(true)
-    
     if (searchQuery.trim() !== '') {
         await buscarEbooks(searchQuery)
         return
     }
-
-    const CACHE_KEY = '@vitrine-grade-cache'
-    const TIME_KEY = '@vitrine-grade-time'
-    
-    const tempoSalvo = localStorage.getItem(TIME_KEY)
-    const dadosSalvos = localStorage.getItem(CACHE_KEY)
-    
-    const agora = new Date().getTime()
-    const tempoExpirado = !tempoSalvo || (agora - parseInt(tempoSalvo)) > (HORAS_CACHE_GRADE * 60 * 60 * 1000)
-
-    if (dadosSalvos && !tempoExpirado) {
-        try {
-            const cachedData = JSON.parse(dadosSalvos)
-            if (cachedData && cachedData.length > 0) {
-                setTodosEbooks(cachedData)
-                aplicarFiltroEEmbaralhamento(cachedData, false)
-                setLoading(false)
-                return
-            }
-        } catch (e) {
-            console.error('Erro ao ler cache:', e)
-        }
-    }
-
     await buscarEbooks('')
   }
 
   const buscarEbooks = async (termoDeBusca: string) => {
     setLoading(true)
     
+    console.log('Buscando e-books no Supabase...')
+
     let query = supabase
       .from('profiles')
       .select('id, nome, titulo_ebook, imagem_url, favoritos_count, views_count, status, data_expiracao')
@@ -76,10 +56,12 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
     const { data, error } = await query
 
     if (error) {
-      console.error('Erro ao buscar:', error)
+      console.error('❌ Erro retornado pelo Supabase:', error)
       setLoading(false)
       return
     }
+
+    console.log('✅ Dados brutos recebidos do Supabase:', data)
 
     const listaBruta = data || []
 
@@ -90,6 +72,8 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
       if (isNaN(dataVencimento)) return true 
       return dataVencimento >= hoje 
     })
+
+    console.log('🔍 E-books após filtro de expiração:', filtradosAtivos.length)
 
     if (!termoDeBusca) {
         const embaralhado = [...filtradosAtivos].sort(() => Math.random() - 0.5)
@@ -113,10 +97,6 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
 
     if (forcarEmbaralhamento && searchQuery.trim() === '') {
       listaParaProcessar = listaParaProcessar.sort(() => Math.random() - 0.5)
-      if (listaParaProcessar.length > 0) {
-          localStorage.setItem('@vitrine-grade-cache', JSON.stringify(listaParaProcessar))
-          localStorage.setItem('@vitrine-grade-time', new Date().getTime().toString())
-      }
     }
 
     setEbooksVisiveis(listaParaProcessar)
@@ -145,7 +125,7 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 text-emerald-600 gap-3">
       <Loader2 className="size-8 animate-spin" />
-      <p className="font-bold">Embaralhando as melhores opções para você...</p>
+      <p className="font-bold">Carregando acervo do Supabase...</p>
     </div>
   )
 
@@ -158,7 +138,7 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
             {searchQuery ? 'Resultados da Busca' : 'Descubra Novos E-books'}
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            {searchQuery ? `Encontramos ${ebooksVisiveis.length} títulos para você.` : 'Seleção especial sorteada do nosso acervo.'}
+            {searchQuery ? `Encontramos ${ebooksVisiveis.length} títulos para você.` : `Total de e-books carregados: ${ebooksVisiveis.length}`}
           </p>
         </div>
 
@@ -182,7 +162,7 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
         </div>
       ) : (
         <div className="text-center py-20 bg-slate-50 rounded-2xl border border-slate-100">
-          <p className="text-slate-500 font-medium text-lg">Nenhum e-book encontrado para esta busca.</p>
+          <p className="text-slate-500 font-medium text-lg">Nenhum e-book encontrado ou o status não é 'ativo'.</p>
         </div>
       )}
 
