@@ -6,7 +6,6 @@ import { TherapistCard } from './therapist-card'
 import { Loader2, RefreshCw } from 'lucide-react'
 
 const ITEMS_POR_CARREGAMENTO = 40 
-const HORAS_CACHE_GRADE = 24 
 
 export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: { searchQuery: string, origem?: string }) {
   const [todosEbooks, setTodosEbooks] = useState<any[]>([])
@@ -41,10 +40,10 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
   const buscarEbooks = async (termoDeBusca: string) => {
     setLoading(true)
     
-    // Removido 'views_count' que não existe na tabela
+    // Consulta limpa contendo apenas colunas garantidas
     let query = supabase
       .from('profiles')
-      .select('id, nome, titulo_ebook, imagem_url, favoritos_count, status, data_expiracao')
+      .select('id, nome, titulo_ebook, imagem_url, status, data_expiracao')
       .eq('status', 'ativo')
 
     if (termoDeBusca) {
