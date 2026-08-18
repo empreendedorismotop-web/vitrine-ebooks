@@ -16,7 +16,6 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
   const [paginaExibida, setPaginaExibida] = useState(1)
 
   useEffect(() => {
-    // Limpa o cache antigo para forçar uma leitura limpa do banco
     localStorage.removeItem('@vitrine-grade-cache')
     localStorage.removeItem('@vitrine-grade-time')
     carregarEbooks()
@@ -42,11 +41,10 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
   const buscarEbooks = async (termoDeBusca: string) => {
     setLoading(true)
     
-    console.log('Buscando e-books no Supabase...')
-
+    // Removido 'views_count' que não existe na tabela
     let query = supabase
       .from('profiles')
-      .select('id, nome, titulo_ebook, imagem_url, favoritos_count, views_count, status, data_expiracao')
+      .select('id, nome, titulo_ebook, imagem_url, favoritos_count, status, data_expiracao')
       .eq('status', 'ativo')
 
     if (termoDeBusca) {
@@ -61,8 +59,6 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
       return
     }
 
-    console.log('✅ Dados brutos recebidos do Supabase:', data)
-
     const listaBruta = data || []
 
     const hoje = new Date().getTime() 
@@ -72,8 +68,6 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
       if (isNaN(dataVencimento)) return true 
       return dataVencimento >= hoje 
     })
-
-    console.log('🔍 E-books após filtro de expiração:', filtradosAtivos.length)
 
     if (!termoDeBusca) {
         const embaralhado = [...filtradosAtivos].sort(() => Math.random() - 0.5)
