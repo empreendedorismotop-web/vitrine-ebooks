@@ -28,26 +28,45 @@ export default function LeitoresPage() {
     }
 
     const carregarDados = async () => {
-      // 1. Busca APENAS os VIPs para o Carrossel
+      // 1. Busca APENAS os VIPs para o Carrossel (BUSCA SELETIVA)
       const { data: dataVips } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, nome, titulo_ebook, imagem_url, favoritos_count, posicao_fixa') // <-- Só o necessário!
         .eq('status', 'ativo')
         .not('posicao_fixa', 'is', null)
         .order('posicao_fixa', { ascending: true })
       
       if (dataVips) setVips(dataVips)
 
-      // 2. Busca TODOS os e-books ativos para o Letreiro Suave
-      const { data: dataAtivos } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('status', 'ativo')
+      // 2. OTIMIZAÇÃO DE CACHE E BANDA: Rotação do Letreiro a cada 2 horas
+      const CACHE_KEY = '@vitrine-leitor-letreiro-cache'
+      const TIME_KEY = '@vitrine-leitor-time'
+      const HORAS_CACHE = 2 
       
-      if (dataAtivos) {
-        // LÓGICA INTELIGENTE: Embaralha a ordem aleatoriamente
-        const listaEmbaralhada = dataAtivos.sort(() => Math.random() - 0.5)
-        setAtivos(listaEmbaralhada)
+      const tempoSalvo = localStorage.getItem(TIME_KEY)
+      const dadosSalvos = localStorage.getItem(CACHE_KEY)
+      
+      const agora = new Date().getTime()
+      const tempoExpirado = !tempoSalvo || (agora - parseInt(tempoSalvo)) > (HORAS_CACHE * 60 * 60 * 1000)
+
+      if (dadosSalvos && !tempoExpirado) {
+          // Usa os dados salvos sem gastar banda do Supabase
+          setAtivos(JSON.parse(dadosSalvos))
+      } else {
+          // Busca TODOS os e-books ativos para o Letreiro Suave (BUSCA SELETIVA)
+          const { data: dataAtivos } = await supabase
+            .from('profiles')
+            .select('id, titulo_ebook, nome') // <-- Só o necessário!
+            .eq('status', 'ativo')
+          
+          if (dataAtivos) {
+            // LÓGICA INTELIGENTE: Embaralha a ordem aleatoriamente e Salva
+            const listaEmbaralhada = dataAtivos.sort(() => Math.random() - 0.5)
+            setAtivos(listaEmbaralhada)
+            
+            localStorage.setItem(CACHE_KEY, JSON.stringify(listaEmbaralhada))
+            localStorage.setItem(TIME_KEY, agora.toString())
+          }
       }
     }
     carregarDados()
