@@ -7,6 +7,8 @@ import { Loader2, RefreshCw } from 'lucide-react'
 
 // Mostra 40 por vez
 const ITEMS_POR_CARREGAMENTO = 40 
+// Cache diário (24 horas) para não gastar o banco
+const HORAS_CACHE_GRADE = 24 
 
 export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: { searchQuery: string, origem?: string }) {
   const [todosEbooks, setTodosEbooks] = useState<any[]>([])
@@ -19,19 +21,64 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
     carregarEbooks()
   }, [])
 
-  // Quando você digita algo na busca lá em cima, ele reseta para mostrar os resultados
+  // Quando você digita algo na busca lá em cima, ele reseta para mostrar os resultados do banco
   useEffect(() => {
-    if (todosEbooks.length > 0) {
-      aplicarFiltroEEmbaralhamento(todosEbooks)
+    if (searchQuery.trim() !== '') {
+        // Se tem busca, fazemos uma busca forçada e limpa ignorando o cache!
+        buscarEbooks(searchQuery)
+    } else if (todosEbooks.length > 0) {
+        // Se apagou a busca, volta a mostrar o que estava em cache
+        aplicarFiltroEEmbaralhamento(todosEbooks)
     }
   }, [searchQuery])
 
+  // Função central para decidir se baixa do Supabase ou usa o Cache do Navegador
   const carregarEbooks = async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    
+    // Ignora cache se tiver algo digitado na busca
+    if (searchQuery.trim() !== '') {
+        await buscarEbooks(searchQuery)
+        return
+    }
+
+    const CACHE_KEY = '@vitrine-grade-cache'
+    const TIME_KEY = '@vitrine-grade-time'
+    
+    const tempoSalvo = localStorage.getItem(TIME_KEY)
+    const dadosSalvos = localStorage.getItem(CACHE_KEY)
+    
+    const agora = new Date().getTime()
+    const tempoExpirado = !tempoSalvo || (agora - parseInt(tempoSalvo)) > (HORAS_CACHE_GRADE * 60 * 60 * 1000)
+
+    if (dadosSalvos && !tempoExpirado) {
+        // Usa os dados salvos sem gastar O BANCO DE DADOS
+        const cachedData = JSON.parse(dadosSalvos)
+        setTodosEbooks(cachedData)
+        aplicarFiltroEEmbaralhamento(cachedData, false) // false = não embaralha de novo, usa como está salvo
+        setLoading(false)
+    } else {
+        // O Cache expirou, vamos fazer o download (apenas colunas necessárias!)
+        await buscarEbooks('')
+    }
+  }
+
+  const buscarEbooks = async (termoDeBusca: string) => {
+    setLoading(true)
+    
+    // OTIMIZAÇÃO CRÍTICA: Select apenas das colunas que o TherapistCard realmente usa
+    // Isso evita baixar MBs de HTMLs ou descrições salvas no banco
+    let query = supabase
       .from('profiles')
-      .select('*')
+      .select('id, nome, titulo_ebook, imagem_url, favoritos_count, views_count, status, data_expiracao')
       .eq('status', 'ativo')
+
+    // Se o usuário digitou algo, filtramos direto no banco (muito mais leve)
+    if (termoDeBusca) {
+        query = query.or(`titulo_ebook.ilike.%${termoDeBusca}%,nome.ilike.%${termoDeBusca}%`)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('Erro ao buscar:', error)
@@ -47,25 +94,31 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
       return dataVencimento >= hoje 
     })
 
-    setTodosEbooks(filtradosAtivos)
-    aplicarFiltroEEmbaralhamento(filtradosAtivos)
+    if (!termoDeBusca) {
+        // Se NÃO é uma busca, embaralha e salva no cache
+        const embaralhado = filtradosAtivos.sort(() => Math.random() - 0.5)
+        setTodosEbooks(embaralhado)
+        aplicarFiltroEEmbaralhamento(embaralhado, false)
+        
+        localStorage.setItem('@vitrine-grade-cache', JSON.stringify(embaralhado))
+        localStorage.setItem('@vitrine-grade-time', new Date().getTime().toString())
+    } else {
+        // Se é busca, só mostra na tela, não salva no cache
+        setEbooksVisiveis(filtradosAtivos)
+        setPaginaExibida(1)
+    }
+    
     setLoading(false)
   }
 
-  const aplicarFiltroEEmbaralhamento = (listaCompleta: any[]) => {
-    let listaParaProcessar = listaCompleta
+  const aplicarFiltroEEmbaralhamento = (listaCompleta: any[], forcarEmbaralhamento = true) => {
+    let listaParaProcessar = [...listaCompleta]
 
-    // Se a pessoa digitou algo na busca, ele NÃO embaralha, ele busca de verdade.
-    if (searchQuery.trim() !== '') {
-      const termoBusca = searchQuery.toLowerCase()
-      listaParaProcessar = listaCompleta.filter((t) => {
-        const nomeAutor = t.nome?.toLowerCase() || ''
-        const tituloEbook = t.titulo_ebook?.toLowerCase() || ''
-        return nomeAutor.includes(termoBusca) || tituloEbook.includes(termoBusca)
-      })
-    } else {
-      // O MOTOR MÁGICO: Se não tem busca, embaralha a ordem para dar chance a todos!
-      listaParaProcessar = [...listaCompleta].sort(() => Math.random() - 0.5)
+    if (forcarEmbaralhamento && searchQuery.trim() === '') {
+      listaParaProcessar = listaParaProcessar.sort(() => Math.random() - 0.5)
+      // Atualiza o cache com a nova ordem sorteada
+      localStorage.setItem('@vitrine-grade-cache', JSON.stringify(listaParaProcessar))
+      localStorage.setItem('@vitrine-grade-time', new Date().getTime().toString())
     }
 
     setEbooksVisiveis(listaParaProcessar)
@@ -84,10 +137,11 @@ export function TherapistsSection({ searchQuery, origem = "Grade Principal" }: {
     }, 600)
   }
 
+  // Botão manual para sortear tudo de novo e salvar o novo sorteio no cache
   const embaralharDeNovo = () => {
     setLoading(true)
     setTimeout(() => {
-      aplicarFiltroEEmbaralhamento(todosEbooks)
+      aplicarFiltroEEmbaralhamento(todosEbooks, true)
       setLoading(false)
     }, 500)
   }

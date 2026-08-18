@@ -7,6 +7,9 @@ import { SiteFooter } from '@/components/site-footer'
 import { Lock, Download, Star, ChevronRight, BookOpen, Heart, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
+// Otimização de Cache: As recomendações premium atualizam só 1x ao dia por usuário
+const HORAS_CACHE_PREMIUM = 24
+
 export default function BibliotecaGratis() {
   const [acessoLiberado, setAcessoLiberado] = useState(false)
   const [email, setEmail] = useState('')
@@ -27,14 +30,41 @@ export default function BibliotecaGratis() {
     }
 
     async function buscarEbooks() {
-      // Busca os Gratuitos
+      // 1. Busca os Gratuitos (Pode continuar igual, costumam ser poucos e leves)
       const { data: gratis } = await supabase.from('ebooks_gratis').select('*').order('created_at', { ascending: false })
       if (gratis) setEbooksG(gratis)
 
-      // Busca TODOS os Pagos Ativos (Sem Limite)
-      const { data: pagos } = await supabase.from('profiles').select('*').eq('status', 'ativo')
-      if (pagos) setEbooksPagos(pagos.sort(() => Math.random() - 0.5)) 
+      // 2. OTIMIZAÇÃO EXTREMA: Busca Recomendações Pagas com Cache Local e Select Seletivo
+      const CACHE_KEY = '@vitrine-gratis-premium-cache'
+      const TIME_KEY = '@vitrine-gratis-premium-time'
+      
+      const tempoSalvo = localStorage.getItem(TIME_KEY)
+      const dadosSalvos = localStorage.getItem(CACHE_KEY)
+      
+      const agora = new Date().getTime()
+      const tempoExpirado = !tempoSalvo || (agora - parseInt(tempoSalvo)) > (HORAS_CACHE_PREMIUM * 60 * 60 * 1000)
+
+      if (dadosSalvos && !tempoExpirado) {
+          // Salva sua banda: O usuário usa a ordem e dados já cacheados
+          setEbooksPagos(JSON.parse(dadosSalvos))
+      } else {
+          // Busca TODOS os Pagos Ativos, MAS baixando apenas o que a tela exige!
+          const { data: pagos } = await supabase
+            .from('profiles')
+            .select('id, titulo_ebook, nome, imagem_url, favoritos_count') // <-- Blindagem: Omissão de dados pesados
+            .eq('status', 'ativo')
+          
+          if (pagos) {
+             const embaralhado = pagos.sort(() => Math.random() - 0.5)
+             setEbooksPagos(embaralhado)
+             
+             // Salva no banco local do usuário para não gastar mais banda
+             localStorage.setItem(CACHE_KEY, JSON.stringify(embaralhado))
+             localStorage.setItem(TIME_KEY, agora.toString())
+          }
+      }
     }
+    
     buscarEbooks()
   }, [])
 
@@ -145,7 +175,7 @@ export default function BibliotecaGratis() {
               )}
             </div>
 
-            {/* RECOMENDAÇÕES PREMIUM */}
+            {/* RECOMENDAÇÕES PREMIUM OTIMIZADAS */}
             {ebooksPagos.length > 0 && (
               <div className="pt-16 border-t border-slate-200 relative">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-6">
