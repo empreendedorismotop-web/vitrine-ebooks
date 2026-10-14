@@ -101,7 +101,9 @@ export default function AdminPage() {
   const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
   const [diasInatividade, setDiasInatividade] = useState(90)
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
-  const [uploading, setUploading] = useState(false) 
+  const [uploading, setUploading] = useState(false)
+
+  const [filtroListaAtual, setFiltroListaAtual] = useState('todos') 
 
   const [configEmail, setConfigEmail] = useState({
     gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_remetente: '', provedor_ativo: 'gmail'
@@ -511,7 +513,14 @@ export default function AdminPage() {
       setClientesExpandidos(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email])
   }
 
-  const emailsValidosFiltrados = todosOsContatos.filter(p => p.email && !p.email.includes('@importado.com'))
+  const aplicarFiltroLista = (p: Perfil) => {
+    if (filtroListaAtual === 'todos') return true
+    if (filtroListaAtual === 'vitrine') return !p.id.startsWith('lead_')
+    if (filtroListaAtual === 'leads') return p.id.startsWith('lead_')
+    return true
+  }
+
+  const emailsValidosFiltrados = todosOsContatos.filter(p => p.email && !p.email.includes('@importado.com')).filter(aplicarFiltroLista)
   const clientesUnicosEmail = Array.from(new Map(emailsValidosFiltrados.map(p => [p.email.toLowerCase(), p])).values())
   const clientesComEmailParaMassa = clientesUnicosEmail.filter(p => {
     if (filtroEmailMassa === 'todos') return true
@@ -520,7 +529,7 @@ export default function AdminPage() {
     return true
   })
 
-  const clientesComWhatsappRaw = todosOsContatos.filter(p => p.telefone && p.telefone.trim() !== '')
+  const clientesComWhatsappRaw = todosOsContatos.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
   const clientesUnicosWhats = Array.from(new Map(clientesComWhatsappRaw.map(p => [p.telefone!.replace(/\D/g, ''), p])).values())
   const clientesWhatsAppFiltrados = clientesUnicosWhats.filter(p => {
     if (filtroWhats === 'todos') return true
