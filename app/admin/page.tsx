@@ -103,10 +103,6 @@ export default function AdminPage() {
   const [perfilEditando, setPerfilEditando] = useState<Perfil | null>(null)
   const [uploading, setUploading] = useState(false) 
 
-    
-  const [filtroListaAtual, setFiltroListaAtual] = useState('todos')
-
-  // ⚠️ ADICIONADO: provedor_ativo no state ⚠️
   const [configEmail, setConfigEmail] = useState({
     gmail_email: '', gmail_senha: '', smtp_host: '', smtp_port: '', smtp_user: '', smtp_pass: '', smtp_remetente: '', provedor_ativo: 'gmail'
   })
@@ -263,57 +259,6 @@ export default function AdminPage() {
     setTimeout(() => setNotificacao({ mostrar: false, msg: '', tipo: '' }), 6000)
   }
 
-  const processarImportacao = async () => {
-    if (!textoImportacao.trim()) return mostrarNotificacao('Cole a lista de e-mails ou números.', 'erro')
-    setImportando(true)
-    const linhas = textoImportacao.split('\n').map(l => l.trim()).filter(l => l !== '')
-    const novosLeads = []
-    const nomeDaListaFinal = nomeListaImportacao.trim() !== '' ? `Lista: ${nomeListaImportacao.trim()}` : 'Lista Importada Padrão'
-
-    for (const linha of linhas) {
-      const isEmail = linha.includes('@')
-      novosLeads.push({
-        id: crypto.randomUUID(), nome: 'Lead Importado',
-        email: isEmail ? linha : `sem-email-${crypto.randomUUID().substring(0,6)}@importado.com`,
-        telefone: isEmail ? null : linha, titulo_ebook: nomeDaListaFinal, link_site: 'https://vitrine-ebooks.vercel.app',
-        plano_selecionado: 'Importado', status: 'inativo', favoritos_count: 0
-      })
-    }
-
-    if (novosLeads.length === 0) { setImportando(false); return mostrarNotificacao('Nenhum dado válido encontrado.', 'erro') }
-    const { error } = await supabase.from('profiles').insert(novosLeads)
-    if (error) { mostrarNotificacao('Erro ao importar contatos.', 'erro'); console.error(error) } 
-    else {
-      mostrarNotificacao(`${novosLeads.length} contatos importados para a ${nomeDaListaFinal}!`, 'sucesso')
-      setModalImportacaoAberto(false); setTextoImportacao(''); setNomeListaImportacao(''); carregarPerfis()
-    }
-    setImportando(false)
-  }
-
-  const excluirLeadsImportados = async () => {
-      let leadsParaExcluir = perfis.filter(p => p.plano_selecionado === 'Importado')
-      if (filtroListaAtual !== 'todos' && filtroListaAtual !== 'vitrine') {
-         leadsParaExcluir = leadsParaExcluir.filter(p => p.titulo_ebook === filtroListaAtual)
-      }
-      if (leadsParaExcluir.length === 0) return mostrarNotificacao('Nenhum lead importado encontrado.', 'sucesso')
-
-      const msg = filtroListaAtual === 'todos' 
-        ? `🚨 Tem certeza que deseja apagar TODOS os ${leadsParaExcluir.length} leads importados?`
-        : `🚨 Tem certeza que deseja apagar APENAS a lista "${filtroListaAtual}"?`
-
-      if (confirm(msg)) {
-          const idsParaExcluir = leadsParaExcluir.map(p => p.id)
-          const { error } = await supabase.from('profiles').delete().in('id', idsParaExcluir)
-          if (error) mostrarNotificacao('Erro ao apagar leads importados.', 'erro')
-          else {
-              mostrarNotificacao(`${idsParaExcluir.length} leads apagados com sucesso!`, 'sucesso')
-              setSelecionados([]) 
-              if (filtroListaAtual !== 'todos') setFiltroListaAtual('todos')
-              carregarPerfis()
-          }
-      }
-  }
-
   const formatarLinkWhatsApp = (numero?: string) => {
     if (!numero) return '#'
     const apenasNumeros = numero.replace(/\D/g, '')
@@ -372,11 +317,11 @@ export default function AdminPage() {
   }
 
   const baixarCSV = () => {
-    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Favoritos', 'Posição VIP', 'Data de Cadastro', 'Lista']
+    const cabecalho = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Vencimento', 'Cliques', 'Favoritos', 'Posição VIP', 'Data de Cadastro']
     const linhas = perfis.map(p => [
         `"${p.nome || ''}"`, `"${p.email || ''}"`, `"${p.telefone || ''}"`, `"${p.status || ''}"`, `"${p.plano_selecionado || ''}"`,
         `"${p.data_expiracao ? p.data_expiracao.split('T')[0] : ''}"`, `"${p.cliques?.length || 0}"`, `"${p.favoritos_count || 0}"`,
-        `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`, `"${p.plano_selecionado === 'Importado' ? p.titulo_ebook : 'Orgânico'}"`
+        `"${p.posicao_fixa || 'Nenhuma'}"`, `"${p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}"`
     ])
     const conteudo = [cabecalho, ...linhas].map(e => e.join(',')).join('\n')
     const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' })
@@ -541,14 +486,14 @@ export default function AdminPage() {
     telefone: l.whatsapp,
     link_site: '',
     titulo_ebook: l.segmento === 'leitor' ? 'Popups: Leitores' : 'Popups: Autores',
-    plano_selecionado: 'Importado', 
+    plano_selecionado: 'Lead',
     status: 'inativo',
     ultimo_email_enviado: l.ultimo_email_enviado,
     ultimo_whats_enviado: l.ultimo_whats_enviado,
   } as Perfil))
 
-  // Agora o sistema só considera quem está na tabela 'profiles' (Vitrine)
-  const todosOsContatos = perfis.filter(p => p.plano_selecionado !== 'Importado')
+  // Somente contatos da Vitrine (perfis cadastrados) - leads de popup tratados separadamente
+  const todosOsContatos = [...perfis, ...leadsConvertidos]
 
   const perfisFiltrados = perfis.filter(p => p.status === abaAtiva)
   const perfisAgrupadosPorCliente = perfisFiltrados.reduce((acc, perfil) => {
@@ -566,15 +511,7 @@ export default function AdminPage() {
       setClientesExpandidos(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email])
   }
 
-  const listasImportadasDisponiveis = Array.from(new Set(todosOsContatos.filter(p => p.plano_selecionado === 'Importado').map(p => p.titulo_ebook)))
-
-  const aplicarFiltroLista = (p: Perfil) => {
-    if (filtroListaAtual === 'todos') return true;
-    if (filtroListaAtual === 'vitrine') return p.plano_selecionado !== 'Importado';
-    return p.titulo_ebook === filtroListaAtual && p.plano_selecionado === 'Importado';
-  }
-
-  const emailsValidosFiltrados = todosOsContatos.filter(p => p.email && !p.email.includes('@importado.com')).filter(aplicarFiltroLista)
+  const emailsValidosFiltrados = todosOsContatos.filter(p => p.email && !p.email.includes('@importado.com'))
   const clientesUnicosEmail = Array.from(new Map(emailsValidosFiltrados.map(p => [p.email.toLowerCase(), p])).values())
   const clientesComEmailParaMassa = clientesUnicosEmail.filter(p => {
     if (filtroEmailMassa === 'todos') return true
@@ -583,7 +520,7 @@ export default function AdminPage() {
     return true
   })
 
-  const clientesComWhatsappRaw = todosOsContatos.filter(p => p.telefone && p.telefone.trim() !== '').filter(aplicarFiltroLista)
+  const clientesComWhatsappRaw = todosOsContatos.filter(p => p.telefone && p.telefone.trim() !== '')
   const clientesUnicosWhats = Array.from(new Map(clientesComWhatsappRaw.map(p => [p.telefone!.replace(/\D/g, ''), p])).values())
   const clientesWhatsAppFiltrados = clientesUnicosWhats.filter(p => {
     if (filtroWhats === 'todos') return true
@@ -604,50 +541,6 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-8 relative">
       
-      {modalImportacaoAberto && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-slate-100 bg-emerald-50 flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold text-emerald-900">📥 Importar Lista de Leads</h2>
-                <p className="text-emerald-700 text-xs mt-1">Cadastre e-mails ou números em massa.</p>
-              </div>
-              <button onClick={() => setModalImportacaoAberto(false)} className="text-emerald-400 hover:text-emerald-700 text-2xl font-bold">&times;</button>
-            </div>
-            
-            <div className="p-6">
-              
-              <div className="mb-4">
-                <label className="block text-sm font-bold text-slate-700 mb-1">Nome da Lista (Opcional)</label>
-                <input 
-                  type="text" 
-                  value={nomeListaImportacao} 
-                  onChange={e => setNomeListaImportacao(e.target.value)} 
-                  className="w-full p-2.5 border border-slate-300 bg-slate-50 rounded-lg outline-none text-sm focus:border-emerald-500" 
-                  placeholder="Ex: Leads Ebook Agosto" 
-                />
-              </div>
-
-              <p className="text-sm text-slate-600 mb-2 font-bold">Cole os dados (1 por linha):</p>
-              <textarea 
-                rows={8} 
-                className="w-full p-4 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 text-sm font-mono"
-                placeholder="exemplo@gmail.com&#10;5511999999999&#10;outro@email.com&#10;..."
-                value={textoImportacao}
-                onChange={(e) => setTextoImportacao(e.target.value)}
-              />
-            </div>
-
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button onClick={() => setModalImportacaoAberto(false)} className="px-5 py-2 rounded-lg font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
-              <button onClick={processarImportacao} disabled={importando || !textoImportacao.trim()} className="px-5 py-2 rounded-lg font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md disabled:opacity-50 flex items-center gap-2">
-                {importando ? '⏳ Importando...' : '📥 Iniciar Importação'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {perfilEditando && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -779,9 +672,7 @@ export default function AdminPage() {
           
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-300">
              <button onClick={baixarCSV} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg text-sm hover:bg-slate-700 shadow-sm">📊 Baixar CSV</button>
-             <button onClick={() => setModalImportacaoAberto(true)} className="px-4 py-2 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-lg text-sm hover:bg-emerald-100 shadow-sm">📥 Importar Leads</button>
              <button onClick={() => setModalLimpezaAberto(true)} className="px-4 py-2 bg-rose-50 text-rose-600 font-bold border border-rose-200 rounded-lg text-sm hover:bg-rose-100 shadow-sm">🧹 Limpar Frios</button>
-             <button onClick={excluirLeadsImportados} className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg text-sm hover:bg-red-700 shadow-sm ml-2">🗑️ Apagar Importados</button>
              <button onClick={() => setAbaAtiva('config')} className={`px-4 py-2 ml-2 rounded-lg font-bold text-sm border shadow-sm ${abaAtiva === 'config' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'}`}>⚙️ Configurações</button>
           </div>
           
@@ -791,20 +682,16 @@ export default function AdminPage() {
           <button onClick={() => setAbaAtiva('campanhas')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'campanhas' ? 'bg-blue-600 text-white' : 'bg-white text-slate-800 border'}`}>📧 E-mail Massa</button>
           <button onClick={() => setAbaAtiva('whatsapp')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'whatsapp' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-700 border border-emerald-200'}`}>💬 WhatsApp Direto</button>
 
-          {/* BOTÃO DE NOTIFICAÇÕES PUSH */}
           <button onClick={() => setAbaAtiva('push')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'push' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}>🔔 Notificações Push</button>
 
-          {/* BOTÃO DA ABA DE LEADS DO POPUP */}
           <button onClick={() => setAbaAtiva('leads')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'leads' ? 'bg-purple-600 text-white' : 'bg-white text-purple-700 border border-purple-200'}`}>
             🎁 Leads E-books ({leadsExit.length})
           </button>
 
-          {/* BOTÃO DA ABA DE CONFIGURAR POPUPS */}
           <button onClick={() => setAbaAtiva('popups')} className={`px-5 py-2 rounded-lg font-bold text-sm ${abaAtiva === 'popups' ? 'bg-pink-600 text-white' : 'bg-white text-pink-700 border border-pink-200'}`}>
             🧲 Textos do Popup
           </button>
 
-          {/* BOTÃO DA BIBLIOTECA GRÁTIS */}
           <button onClick={() => setAbaAtiva('biblioteca')} className={`px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 ${abaAtiva === 'biblioteca' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}>
             📚 Biblioteca Grátis
           </button>
@@ -885,11 +772,10 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ⚠️ NOVA ABA: CONFIGURAR TEXTOS DOS POPUPS ⚠️ */}
+        {/* ⚠️ ABA: CONFIGURAR TEXTOS DOS POPUPS */}
         {abaAtiva === 'popups' && (
           <div className="grid lg:grid-cols-2 gap-8">
             
-            {/* POPUP DE LEITORES (VITRINE) */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="p-6 border-b border-slate-100 bg-blue-50">
                 <h2 className="text-xl font-bold text-blue-900">📚 Popup de Leitores (Vitrine)</h2>
@@ -915,7 +801,6 @@ export default function AdminPage() {
               </form>
             </div>
 
-            {/* POPUP DE AUTORES (CADASTRO) */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="p-6 border-b border-slate-100 bg-emerald-50">
                 <h2 className="text-xl font-bold text-emerald-900">🚀 Popup de Anunciantes</h2>
@@ -1260,17 +1145,9 @@ export default function AdminPage() {
                      onChange={(e) => { setFiltroListaAtual(e.target.value); setSelecionados([]) }} 
                      className="text-sm font-bold bg-white text-slate-700 border border-slate-300 rounded p-1.5 outline-none"
                    >
-                     <option value="todos">Todos os Contatos Válidos</option>
-                     <option value="vitrine">Apenas Clientes da Vitrine</option>
-                     <optgroup label="Leads da Popup">
-                       <option value="Popups: Leitores">Popups: Leitores</option>
-                       <option value="Popups: Autores">Popups: Autores</option>
-                     </optgroup>
-                     <optgroup label="Listas Importadas">
-                       {listasImportadasDisponiveis.filter(l => !l.startsWith('Popups:')).map(lista => (
-                         <option key={lista} value={lista}>{lista}</option>
-                       ))}
-                     </optgroup>
+                     <option value="todos">Todos os Contatos</option>
+                     <option value="vitrine">Apenas Clientes Cadastrados</option>
+                     <option value="leads">Apenas Leads de Popup</option>
                    </select>
                  </div>
 
@@ -1375,16 +1252,8 @@ export default function AdminPage() {
                      className="text-sm font-bold bg-white text-emerald-900 border border-emerald-300 rounded p-1.5 outline-none"
                    >
                      <option value="todos">Todos os Contatos c/ Whats</option>
-                     <option value="vitrine">Apenas Clientes da Vitrine</option>
-                     <optgroup label="Leads da Popup">
-                       <option value="Popups: Leitores">Popups: Leitores</option>
-                       <option value="Popups: Autores">Popups: Autores</option>
-                     </optgroup>
-                     <optgroup label="Listas Importadas">
-                       {listasImportadasDisponiveis.filter(l => !l.startsWith('Popups:')).map(lista => (
-                         <option key={lista} value={lista}>{lista}</option>
-                       ))}
-                     </optgroup>
+                     <option value="vitrine">Apenas Clientes Cadastrados</option>
+                     <option value="leads">Apenas Leads de Popup</option>
                    </select>
                  </div>
                  
@@ -1472,7 +1341,6 @@ export default function AdminPage() {
             
             <form onSubmit={salvarConfiguracoesEmail} className="p-6 space-y-8">
 
-              {/* ⚠️ AQUI ESTÁ A CENTRAL DE COMANDO ⚠️ */}
               <div>
                 <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Servidor Padrão do Sistema</h3>
                 <div className="bg-slate-100 p-4 rounded-xl mb-8 border border-slate-200">
